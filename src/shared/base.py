@@ -14,10 +14,10 @@ class StructuralElement(ABC):
         super().__init__()
 
     @property
-    def attrib(self) -> dict:
-        """dict with tmx compliant key names"""
+    def _attrib(self) -> dict[str, str]:
+        """dict with tmx compliant key:value pairs. used when building lxml element"""
         attrs: dict = dict()
-        for key in vars(self).keys():
+        for key in vars(self).items():
             if key == "lang":
                 attrs[f"{xml}lang"] = getattr(self, key)
             elif key in ["tmf", "encoding"]:
@@ -32,6 +32,7 @@ class StructuralElement(ABC):
     def _element(self) -> _Element:
         """lxml Element representation of the class."""
         elem: _Element = Element(self.name)
-        for key, value in self.attrib.items():
-            elem.set(key, str(value))
+        for key, value in self._attrib.items():
+            if value is not None:
+                elem.set(key, value)
         return elem

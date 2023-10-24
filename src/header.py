@@ -1,7 +1,6 @@
 """everything header related"""
 
 from shared.base import StructuralElement
-from typing import Any, Literal
 
 
 class header(StructuralElement):
@@ -27,12 +26,12 @@ class header(StructuralElement):
         self,
         creationtool: str,
         creationtoolversion: str,
-        segtype: Literal["block", "paragraph", "sentence", "phrase"],
-        tmf: str,
+        segtype: str,
+        otmf: str,
         adminlang: str,
         srclang: str,
         datatype: str,
-        encoding: str | None = None,
+        oencoding: str | None = None,
         creationdate: str | None = None,
         creationid: str | None = None,
         changedate: str | None = None,
@@ -40,28 +39,14 @@ class header(StructuralElement):
     ) -> None:
         self.creationtool: str = creationtool
         self.creationtoolversion: str = creationtoolversion
-        self.segtype: Literal["block", "paragraph", "sentence", "phrase"] = segtype
-        self.tmf: str = tmf
+        self.segtype: str = segtype
+        self.otmf: str = otmf
         self.adminlang: str = adminlang
         self.srclang: str = srclang
         self.datatype: str = datatype
-        self.encoding: str | None = encoding
+        self.oencoding: str | None = oencoding
         self.creationdate: str | None = creationdate
         self.creationid: str | None = creationid
         self.changedate: str | None = changedate
         self.changeid: str | None = changeid
         super().__init__()
-
-    def __setattr__(self, __name: str, __value: Any) -> None:
-        if __name == "segtype" and __value not in [
-            "block",
-            "paragraph",
-            "sentence",
-            "phrase",
-        ]:
-            raise ValueError
-        return super().__setattr__(__name, __value)
-
-
-h = header("", "", "", "", "", "", "")
-1
