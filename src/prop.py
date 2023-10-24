@@ -1,30 +1,38 @@
-"""Everything prop related"""
+"""note object definition"""
+from dataclasses import dataclass
+from xml.etree.ElementTree import Element
 
-from typing import Any
-from shared.base import StructuralElement
 
-
-class prop(StructuralElement):
-    """Property - used to define the various properties of its parent (or of the document when used in the header).\n
-    These properties are not defined by the tmx spec.\n
+@dataclass(kw_only=True, slots=True)
+class prop:
+    """Property - used to define the various properties of the parent element (or of the document when used in the header.\n
+    These properties are not defined by the standard.\n
     Attributes:
         - Required:
-            - prop_type
             - value
-        - Optional:
+            - prop_type
+        - Optional attributes:
             - lang
-            - encoding.
+            - oencoding\n
     """
 
-    def __init__(
-        self,
-        prop_type: str,
-        value: Any,
-        lang: str | None = None,
-        encoding: str | None = None,
-    ) -> None:
-        self.prop_type: str = prop_type
-        self.value: Any = value
-        self.lang: str | None = lang
-        self.encoding: str | None = encoding
-        super().__init__()
+    value: str
+    prop_type: str
+    lang: str | None = None
+    oencoding: str | None = None
+
+    def _to_element(self) -> Element:
+        """Returns a <prop> xml Element with tmx-compliant attribute names and values and all props and notes as xml SubElements"""
+        prop_elem: Element = Element("prop", attrib=self._make_attrib())
+        prop_elem.text = self.value
+        return prop_elem
+
+    def _make_attrib(self) -> dict[str, str]:
+        """For use in _to_element function, converts object's properties to a tmx-compliant dict of attributes"""
+        attrs: dict = {}
+        attrs["type"] = self.prop_type
+        if self.lang is not None:
+            attrs["{http://www.w3.org/XML/1998/namespace}lang"] = self.lang
+        if self.oencoding is not None:
+            attrs["o-encoding"] = self.oencoding
+        return attrs
