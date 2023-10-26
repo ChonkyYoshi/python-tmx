@@ -18,7 +18,7 @@ class prop:
 
     value: str
     prop_type: str
-    lang: str | None = None
+    xmllang: str | None = None
     oencoding: str | None = None
 
     def _to_element(self) -> Element:
@@ -31,8 +31,8 @@ class prop:
         """For use in _to_element function, converts object's properties to a tmx-compliant dict of attributes"""
         attrs: dict = {}
         attrs["type"] = self.prop_type
-        if self.lang is not None:
-            attrs["{http://www.w3.org/XML/1998/namespace}lang"] = self.lang
+        if self.xmllang is not None:
+            attrs["{http://www.w3.org/XML/1998/namespace}lang"] = self.xmllang
         if self.oencoding is not None:
             attrs["o-encoding"] = self.oencoding
         return attrs

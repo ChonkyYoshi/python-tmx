@@ -1,0 +1,31 @@
+"""tu object definition"""
+from dataclasses import dataclass, field
+from typing import Literal
+from note import note
+from prop import prop
+from tuv import tuv
+
+type Segtype = Literal["block", "paragraph", "sentence", "phrase"]
+
+
+@dataclass(kw_only=True, slots=True)
+class tu:
+    """tuid, o-encoding, datatype, usagecount, lastusagedate, creationtool, creationtoolversion, creationdate, creationid, changedate, segtype, changeid, o-tmf, srclang."""
+
+    tuid: str | None = None
+    oenconding: str | None = None
+    datatype: str | None = None
+    usagecount: str | None = None
+    lastusagedate: str | None = None
+    creationtool: str | None = None
+    creationtoolversion: str | None = None
+    creationdate: str | None = None
+    creationid: str | None = None
+    changedate: str | None = None
+    segtype: Segtype | None = None
+    changeid: str | None = None
+    otmf: str | None = None
+    srclang: str | None = None
+    notes: list[note] = field(default_factory=list)
+    props: list[prop] = field(default_factory=list)
+    tuvs: list[tuv] = field(default_factory=list)

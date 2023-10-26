@@ -1,11 +1,9 @@
 """header object definition"""
 from dataclasses import dataclass, field
 from typing import Literal
-from xml.etree.ElementTree import Element, tostring
+from xml.etree.ElementTree import Element
 from note import note
 from prop import prop
-
-type Segtype = Literal["block", "paragraph", "sentence", "phrase"]
 
 
 @dataclass(kw_only=True, slots=True)
@@ -32,7 +30,7 @@ class header:
 
     creationtool: str
     creationtoolversion: str
-    segtype: Segtype
+    segtype: Literal["block", "paragraph", "sentence", "phrase"]
     otmf: str
     adminlang: str
     srclang: str
@@ -48,10 +46,10 @@ class header:
     def _to_element(self) -> Element:
         """Returns a <header> xml Element with tmx-compliant attribute names and values and all props and notes as xml SubElements"""
         header_elem: Element = Element("header", attrib=self._make_attrib())
-        for index, note_obj in enumerate(self.notes):
-            header_elem.insert(index, note_obj._to_element())
-        for index, prop_obj in enumerate(self.props):
-            header_elem.insert(index, prop_obj._to_element())
+        for note_obj in self.notes:
+            header_elem.append(note_obj._to_element())
+        for prop_obj in self.props:
+            header_elem.append(prop_obj._to_element())
         return header_elem
 
     def _make_attrib(self) -> dict[str, str]:

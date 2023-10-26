@@ -15,7 +15,7 @@ class note:
     """
 
     value: str
-    lang: str | None = None
+    xmllang: str | None = None
     oencoding: str | None = None
 
     def _to_element(self) -> Element:
@@ -27,8 +27,8 @@ class note:
     def _make_attrib(self) -> dict[str, str]:
         """For use in _to_element function, converts object's properties to a tmx-compliant dict of attributes"""
         attrs: dict = {}
-        if self.lang is not None:
-            attrs["{http://www.w3.org/XML/1998/namespace}lang"] = self.lang
+        if self.xmllang is not None:
+            attrs["{http://www.w3.org/XML/1998/namespace}lang"] = self.xmllang
         if self.oencoding is not None:
             attrs["o-encoding"] = self.oencoding
         return attrs
