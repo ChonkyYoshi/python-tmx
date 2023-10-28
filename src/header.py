@@ -1,7 +1,7 @@
 """header object definition"""
 from dataclasses import dataclass, field
 from typing import Literal
-from xml.etree.ElementTree import Element
+from lxml.etree import _Element, Element
 from note import note
 from prop import prop
 
@@ -43,35 +43,41 @@ class header:
     notes: list[note] = field(default_factory=list)
     props: list[prop] = field(default_factory=list)
 
-    def _to_element(self) -> Element:
-        """Returns a <header> xml Element with tmx-compliant attribute names and values and all props and notes as xml SubElements"""
-        header_elem: Element = Element("header", attrib=self._make_attrib())
+    @property
+    def _element(self) -> _Element:
+        """Returns a <header> lxml Element with tmx-compliant attributes and all props and notes as xml SubElements"""
+        header_elem: _Element = Element("header", attrib=self._attrib)
         for note_obj in self.notes:
-            header_elem.append(note_obj._to_element())
+            header_elem.append(note_obj._element)
         for prop_obj in self.props:
-            header_elem.append(prop_obj._to_element())
+            header_elem.append(prop_obj._element)
         return header_elem
 
-    def _make_attrib(self) -> dict[str, str]:
-        """For use in _to_element function, converts object's properties to a tmx-compliant dict of attributes"""
+    @property
+    def _attrib(self) -> dict[str, str]:
+        """For use in _element function, converts object's properties to a tmx-compliant dict of attributes, discards any attribute with a value of None"""
         attrs: dict = {}
-        for attr in [
-            "creationtool",
-            "creationtoolversion",
-            "segtype",
-            "adminlang",
-            "srclang",
-            "datatype",
-            "oenconding",
-            "creationdate",
-            "creationid",
-            "changedate",
-            "changeid",
+        for attr_name in [
+            "creationtool"
+            "creationtoolversion"
+            "segtype"
+            "otmf"
+            "adminlang"
+            "srclang"
+            "datatype"
+            "oencoding"
+            "creationdate"
+            "creationid"
+            "changedate"
+            "changeid"
         ]:
-            if getattr(self, attr) is not None:
-                attrs[attr] = getattr(self, attr)
-        if self.otmf is not None:
-            attrs["o-tmf"] = self.otmf
-        if self.oenconding is not None:
-            attrs["o-encoding"] = self.oenconding
+            attr_value = getattr(self, attr_name, None)
+            if attr_value is not None:
+                match attr_name:
+                    case "oencoding":
+                        attrs["o-encoding"] = self.oenconding
+                    case "otmf":
+                        attrs["o-tmf"] = self.otmf
+                    case _:
+                        attrs[attr_name] = attr_value
         return attrs

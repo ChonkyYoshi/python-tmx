@@ -1,6 +1,6 @@
 """note object definition"""
 from dataclasses import dataclass
-from xml.etree.ElementTree import Element
+from lxml.etree import Element, _Element
 
 
 @dataclass(kw_only=True, slots=True)
@@ -14,18 +14,20 @@ class note:
             - oencoding\n
     """
 
-    value: str
+    text: str
     xmllang: str | None = None
     oencoding: str | None = None
 
-    def _to_element(self) -> Element:
-        """Returns a <note> xml Element with tmx-compliant attribute names and values and all props and notes as xml SubElements"""
-        note_elem: Element = Element("header", attrib=self._make_attrib())
-        note_elem.text = self.value
+    @property
+    def _element(self) -> _Element:
+        """Returns a <note> lxml Element with tmx-compliant attributes"""
+        note_elem: _Element = Element("note", attrib=self._attrib)
+        note_elem.text = self.text
         return note_elem
 
-    def _make_attrib(self) -> dict[str, str]:
-        """For use in _to_element function, converts object's properties to a tmx-compliant dict of attributes"""
+    @property
+    def _attrib(self) -> dict[str, str]:
+        """For use in _element function, converts object's properties to a tmx-compliant dict of attributes, discards any attribute with a value of None"""
         attrs: dict = {}
         if self.xmllang is not None:
             attrs["{http://www.w3.org/XML/1998/namespace}lang"] = self.xmllang
