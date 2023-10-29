@@ -1,5 +1,6 @@
 """note object definition"""
 from dataclasses import dataclass
+
 from lxml.etree import Element, _Element
 
 

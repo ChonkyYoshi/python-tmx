@@ -1,10 +1,11 @@
 """tu object definition"""
 from dataclasses import dataclass, field
 from typing import Literal
+
+from lxml.etree import Element, _Element
 from note import note
 from prop import prop
 from tuv import tuv
-from lxml.etree import _Element, Element
 
 type Segtype = Literal["block", "paragraph", "sentence", "phrase"]
 
