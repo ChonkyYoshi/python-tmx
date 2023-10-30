@@ -1,4 +1,4 @@
-"""run object definition"""
+"""inline tags definition"""
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -15,7 +15,7 @@ class run:
 
     @property
     def _element(self) -> _Element:
-        """Returns a fake <fake> lxml Element"""
+        """Returns a fake <fake> lxml Element to keep document order"""
         run_elem: _Element = Element("fake")
         run_elem.text = self.text
         return run_elem
