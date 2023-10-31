@@ -7,7 +7,7 @@ from lxml.etree import Element, _Element
 
 @dataclass(kw_only=True, slots=True)
 class run:
-    text: str
+    text: str | None = None
     name: str = field(init=False, repr=False)
 
     def __post_init__(self):
@@ -23,7 +23,7 @@ class run:
 
 @dataclass(kw_only=True, slots=True)
 class bpt(run):
-    i: str
+    i: str | None = None
     x: str | None = None
     bpt_type: str | None = None
 
@@ -38,10 +38,9 @@ class bpt(run):
     def _attrib(self) -> dict[str, str]:
         """For use in _element property, converts object's properties to a tmx-compliant dict of attributes"""
         attrs: dict = {}
-        attrs["i"] = self.i
-        if self.x is not None:
+        if self.x is not None and self.x != "":
             attrs["x"] = self.x
-        if self.bpt_type is not None:
+        if self.bpt_type is not None and self.bpt_type != "":
             attrs["type"] = self.bpt_type
         return attrs
 
