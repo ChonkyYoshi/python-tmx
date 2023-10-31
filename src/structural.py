@@ -13,13 +13,13 @@ class note:
     """Note - used for comments.\n
     Attributes:
         - Required:
-            - value
+            - text
         - Optional attributes:
             - lang
             - oencoding\n
     """
 
-    text: str
+    text: str | None = None
     xmllang: str | None = None
     oencoding: str | None = None
 
@@ -27,6 +27,10 @@ class note:
     def _element(self) -> _Element:
         """Returns a <note> lxml Element with tmx-compliant attributes"""
         note_elem: _Element = Element("note", attrib=self._attrib)
+        if self.text is None:
+            raise MissingRequiredAttribute("Required attribute 'text' missing")
+        else:
+            note_elem.text = self.text
         note_elem.text = self.text
         return note_elem
 
@@ -47,15 +51,15 @@ class prop:
     These properties are not defined by the standard.\n
     Attributes:
         - Required:
-            - value
+            - text
             - prop_type
         - Optional attributes:
             - lang
             - oencoding\n
     """
 
-    text: str
-    prop_type: str
+    text: str | None = None
+    prop_type: str | None = None
     xmllang: str | None = None
     oencoding: str | None = None
 
