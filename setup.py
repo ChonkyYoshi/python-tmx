@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="python-tmx",
-    version="0.1",
+    version="0.1.2",
     author="Enzo Agosta",
     author_email="agosta.enzowork@gmail.com",
     description="Python library for manipulating tmx files",
