@@ -38,6 +38,7 @@ class bpt(run):
     def _attrib(self) -> dict[str, str]:
         """For use in _element property, converts object's properties to a tmx-compliant dict of attributes"""
         attrs: dict = {}
+        attrs["i"] = self.i
         if self.x is not None and self.x != "":
             attrs["x"] = self.x
         if self.bpt_type is not None and self.bpt_type != "":

@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field
 from lxml.etree import Element, _Element
 from typing import Literal
-from inline import run
+from .inline import run
 from datetime import datetime
 from re import match
 
@@ -90,7 +90,6 @@ class tuv:
         - Required:
             - xmllang
         - Optional
-            - tuid
             - oencoding
             - datatype
             - usagecount
@@ -100,10 +99,8 @@ class tuv:
             - creationdate
             - creationid
             - changedate
-            - segtype
             - changeid
-            - otmf
-            - srclang.\n"""
+            - otmf\n"""
 
     xmllang: str | None = None
     tuid: str | int | None = None
@@ -155,7 +152,6 @@ class tuv:
         else:
             tmx_attrib["{http://www.w3.org/XML/1998/namespace}lang"] = self.xmllang
         for attribute in [
-            "tuid",
             "oencoding",
             "datatype",
             "usagecount",
@@ -165,7 +161,6 @@ class tuv:
             "creationdate",
             "creationid",
             "changedate",
-            "segtype",
             "changeid",
             "otmf",
         ]:
@@ -182,14 +177,6 @@ class tuv:
                         if not match(r"\d{8}T\d{6}"):
                             raise ValueError(f"{attribute} format is not correct.")
                         tmx_attrib[attribute] = value
-
-                elif attribute == "segtype" and not isinstance(
-                    str(value.lower()),
-                    Literal["block", "paragraph", "sentence", "phrase"],
-                ):
-                    raise ValueError(
-                        f"segtype must be one of block, paragraph, sentence or phrase not {self.segtype}"
-                    )
                 elif attribute == "otmf":
                     tmx_attrib["o-tmf"] = str(value)
                 else:
@@ -253,31 +240,24 @@ class tu:
         """For use in _element function, converts object's properties to a tmx-compliant dict of attributes, discards any attribute with a value of None"""
         tmx_attrib: dict = {}
         for attribute in [
-            "creationtool"
-            "creationtoolversion"
-            "segtype"
-            "otmf"
-            "adminlang"
-            "srclang"
-            "datatype"
-            "oencoding"
-            "creationdate"
-            "creationid"
-            "changedate"
-            "changeid"
+            "tuid",
+            "oencoding",
+            "datatype",
+            "usagecount",
+            "lastusagedate",
+            "creationtool",
+            "creationtoolversion",
+            "creationdate",
+            "creationid",
+            "changedate",
+            "segtype",
+            "changeid",
+            "otmf",
+            "srclang",
         ]:
             value = getattr(self, attribute, None)
             if value is not None:
-                if attribute == "segtype" and not isinstance(
-                    str(value.lower()),
-                    Literal["block", "paragraph", "sentence", "phrase"],
-                ):
-                    raise ValueError(
-                        f"segtype must be one of block, paragraph, sentence or phrase not {self.segtype}"
-                    )
-                elif attribute == "otmf":
-                    tmx_attrib["o-tmf"] = str(value)
-                elif attribute == "oencoding":
+                if attribute == "oencoding":
                     tmx_attrib["o-encoding"] = str(value)
                 elif attribute == "creationdate" | "changedate":
                     if isinstance(value, datetime):
@@ -288,6 +268,15 @@ class tu:
                         if not match(r"\d{8}T\d{6}"):
                             raise ValueError(f"{attribute} format is not correct.")
                         tmx_attrib[attribute] = value
+                elif attribute == "segtype" and not isinstance(
+                    str(value.lower()),
+                    Literal["block", "paragraph", "sentence", "phrase"],
+                ):
+                    raise ValueError(
+                        f"segtype must be one of block, paragraph, sentence or phrase not {self.segtype}"
+                    )
+                elif attribute == "otmf":
+                    tmx_attrib["o-tmf"] = str(value)
                 else:
                     tmx_attrib[attribute] = value
         return tmx_attrib
@@ -343,18 +332,18 @@ class header:
         """Returns a dict of the objects attribute for use in during export"""
         tmx_attrib: dict = {}
         for attribute in [
-            "creationtool"
-            "creationtoolversion"
-            "segtype"
-            "otmf"
-            "adminlang"
-            "srclang"
-            "datatype"
-            "oencoding"
-            "creationdate"
-            "creationid"
-            "changedate"
-            "changeid"
+            "creationtool",
+            "creationtoolversion",
+            "segtype",
+            "otmf",
+            "adminlang",
+            "srclang",
+            "datatype",
+            "oencoding",
+            "creationdate",
+            "creationid",
+            "changedate",
+            "changeid",
         ]:
             value = getattr(self, attribute, None)
             if value is not None:
@@ -397,4 +386,4 @@ class header:
 @dataclass(kw_only=True, slots=True)
 class tmx:
     Header: header | None = None
-    tus: list[tu] | None = None
+    tus: list[tu] | None = field(default_factory=list)
