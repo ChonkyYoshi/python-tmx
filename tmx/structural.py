@@ -1,6 +1,6 @@
 """structural tags definitions"""
 from dataclasses import dataclass, field
-from lxml.etree import Element, _Element, ElementTree, _ElementTree, indent
+from lxml.etree import Element, _Element, ElementTree, _ElementTree
 from typing import Literal
 from .inline import run
 from datetime import datetime
@@ -64,9 +64,11 @@ class prop:
         """Returns a <prop> lxml Element"""
         elem: _Element = Element("prop", attrib=self._get_tmx_attrib())
         if self.text is None:
-            raise ValueError("text cannot be None")
+            raise AttributeError("text cannot be None")
         else:
             elem.text = str(self.text)
+        if self.prop_type is None:
+            raise AttributeError()
         return elem
 
     def _get_tmx_attrib(self) -> dict[str, str]:
