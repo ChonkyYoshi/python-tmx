@@ -401,6 +401,5 @@ class tmx:
         for tu_obj in self.tus:
             body_elem.append(tu_obj._make_element())
         tmx_tree: _ElementTree = ElementTree(tmx_root)
-        indent(tmx_tree, "    ")
         with Path(dest).open("wb") as f:
             tmx_tree.write(f, encoding="utf-8", xml_declaration=True)
