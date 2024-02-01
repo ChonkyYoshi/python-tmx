@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "python-tmx"
+version = "0.1.3"
+authors = [
+  { name="Enzo Agosta", email="agosta.enzowork@gmail.com" },
+]
+description = "Python library for manipulating, creating and editing tmx files"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/ChonkyYoshi/python-tmx"
+Issues = "https://github.com/ChonkyYoshi/python-tmx/issues"
