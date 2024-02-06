@@ -31,7 +31,6 @@ class header:
         adminlang: str,
         srclang: str,
         datatype: str,
-        _validate: bool = True,
         **kwargs,
     ) -> None:
         for attr in self.__slots__:
@@ -46,10 +45,11 @@ class header:
         self.adminlang = adminlang
         self.srclang = srclang
         self.datatype = datatype
-        if _validate:
-            self._ValidateAttributes()
 
-    def _ValidateAttributes(self) -> None:
+    def ValidateAttributes(
+        self, force_string: bool
+    ) -> dict[str, str | datetime] | dict[str, str]:
+        attribs: dict = {}
         for attr in self.__slots__:
             attr_value = getattr(self, attr)
             match attr_value:
@@ -60,7 +60,11 @@ class header:
                         raise TypeError(
                             f"datetime objects cannot be used for attribute {attr}"
                         )
-                    continue
+                    attribs[attr] = (
+                        datetime.strftime(attr_value, "%Y%m%dT%H%M%SZ")
+                        if force_string
+                        else attr_value
+                    )
                 case str():
                     if attr.endswith("lang"):
                         if not match(
@@ -71,7 +75,7 @@ class header:
 {attr} should be in the format xx(-YY)
 where xx is a 2 letter ISO country code and YY is an optional 2 or 3 letter ISO language code"""
                             )
-                        continue
+                        attribs[attr] = attr_value
                     if attr == "segtype" and attr_value not in [
                         "block",
                         "paragraph",
@@ -84,8 +88,9 @@ segtype should be one of block, paragraph, sentence or phrase."""
                         )
                     if attr.endswith("date"):
                         datetime.strptime(attr_value, "%Y%m%dT%H%M%SZ")
-                        continue
+                    attribs[attr] = attr_value
                 case _:
                     raise TypeError(
                         f"only strings (and datetime objects for creationdate and changedate) can be used as values for header attribute not {type(attr_value)}"
                     )
+        return attribs
