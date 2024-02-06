@@ -1,6 +1,5 @@
 from typing import Literal
-from xml.etree.ElementTree import Element, ElementTree
-from datetime import datetime, UTC
+from datetime import datetime
 from re import match
 
 
@@ -25,7 +24,6 @@ class header:
 
     def __init__(
         self,
-        _validate: bool,
         creationtool: str,
         creationtoolversion: str,
         segtype: Literal["block", "paragraph", "sentence", "phrase"],
@@ -33,6 +31,7 @@ class header:
         adminlang: str,
         srclang: str,
         datatype: str,
+        _validate: bool = True,
         **kwargs,
     ) -> None:
         for attr in self.__slots__:
@@ -90,22 +89,3 @@ segtype should be one of block, paragraph, sentence or phrase."""
                     raise TypeError(
                         f"only strings (and datetime objects for creationdate and changedate) can be used as values for header attribute not {type(attr_value)}"
                     )
-
-    def _XmlElement(self) -> Element:
-        self._ValidateAttributes()
-        attribs: dict = {
-            attr: getattr(self, attr)
-            for attr in self.__slots__
-            if getattr(self, attr) is not None
-        }
-        return Element(
-            "header",
-            {
-                key: (
-                    value
-                    if not isinstance(value, datetime)
-                    else datetime.strftime(value, "%Y%m%dT%H%M%SZ")
-                )
-                for key, value in attribs.items()
-            },
-        )
