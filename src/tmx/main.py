@@ -84,7 +84,7 @@ def ValidateAttributes(
                                 )
                     case "props":
                         for index, _prop in enumerate(attr_value):
-                            if _prop is not note:
+                            if _prop is not prop:
                                 raise TypeError(
                                     f"prop {index} is of type {type(_prop)} not prop"
                                 )
@@ -93,10 +93,3 @@ def ValidateAttributes(
             case _:
                 raise TypeError(f"{type(attr_value)} are not allowed")
     return attribs
-
-
-a = ValidateAttributes(prop("test", "zedsfrgh"), True)
-b = ValidateAttributes(prop("123", "123.456"), True)
-c = ValidateAttributes(note("fef"), True)
-d = ValidateAttributes(note("123"), True)
-1
