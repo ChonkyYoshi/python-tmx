@@ -121,10 +121,3 @@ class ept(run):
     def __init__(self, text: str, i: int | str) -> None:
         self.i = i
         super().__init__("ept", text)
-
-
-class seg:
-    __slots__ = ["content"]
-
-    def __init__(self, content: list[run]) -> None:
-        self.content = content

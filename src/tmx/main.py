@@ -1,6 +1,6 @@
 from datetime import datetime
 from re import match
-from objects import note, prop
+from objects import note, prop, run
 
 
 def ValidateAttributes(
@@ -78,18 +78,22 @@ def ValidateAttributes(
                 match attr:
                     case "notes":
                         for index, _note in enumerate(attr_value):
-                            if _note is not note:
+                            if not isinstance(_note, note):
                                 raise TypeError(
-                                    f"note {index}  is of type {type(_note)} not note"
+                                    f"note at index {index} is of type {type(_note)} not note"
                                 )
                     case "props":
                         for index, _prop in enumerate(attr_value):
-                            if _prop is not prop:
+                            if not isinstance(_prop, prop):
                                 raise TypeError(
-                                    f"prop {index} is of type {type(_prop)} not prop"
+                                    f"prop at index {index} is of type {type(_prop)} not prop"
                                 )
                     case "seg":
-                        raise NotImplementedError
+                        for index, _run in enumerate(attr_value):
+                            if not isinstance(_run, run):
+                                raise TypeError(
+                                    f"run at index {index} is of type {type(_run)} not run"
+                                )
             case _:
                 raise TypeError(f"{type(attr_value)} are not allowed")
     return attribs
