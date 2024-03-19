@@ -1,22 +1,56 @@
-from typing import Literal, Iterable
 from datetime import datetime
-from xml.etree.ElementTree import Element
+from os import PathLike
+from typing import Iterable, Literal, Protocol
+from xml.etree.ElementTree import Element, ElementTree, SubElement, indent
 
 
-class Note:
-    __slots__ = ["text", "lang", "encoding", "_name"]
+class InlineElement(Protocol):
+    @property
+    def _attrib(self) -> dict[str, str]:
+        raise NotImplementedError
+
+    @property
+    def _XmlElement(self) -> Element:
+        raise NotImplementedError
+
+
+class StructuralElement(Protocol):
+    @property
+    def _attrib(self) -> dict[str, str]:
+        raise NotImplementedError
+
+    @property
+    def _XmlElement(self) -> Element:
+        raise NotImplementedError
+
+
+class Note(StructuralElement):
+    __slots__ = ["text", "lang", "encoding"]
 
     def __init__(
         self, text: str, lang: str | None = None, encoding: str | None = None
     ) -> None:
-        self._name = "note"
         self.text = text
         self.lang = lang
         self.encoding = encoding
 
+    @property
+    def _attrib(self) -> dict[str, str]:
+        attrs: dict = {
+            "{http://www.w3.org/XML/1998/namespace}lang": self.lang,
+            "o-encoding": self.encoding,
+        }
+        return {key: value for key, value in attrs.items() if value is not None}
 
-class Prop:
-    __slots__ = ["text", "_type", "lang", "encoding", "_name"]
+    @property
+    def _XmlElement(self) -> Element:
+        elem: Element = Element("note", attrib=self._attrib)
+        elem.text = self.text
+        return elem
+
+
+class Prop(StructuralElement):
+    __slots__ = ["text", "_type", "lang", "encoding"]
 
     def __init__(
         self,
@@ -25,16 +59,29 @@ class Prop:
         lang: str | None = None,
         encoding: str | None = None,
     ) -> None:
-        self._name = "prop"
         self.text = text
         self._type = _type
         self.lang = lang
         self.encoding = encoding
 
+    @property
+    def _attrib(self) -> dict[str, str]:
+        attrs: dict = {
+            "{http://www.w3.org/XML/1998/namespace}lang": self.lang,
+            "type": self._type,
+            "o-encoding": self.encoding,
+        }
+        return {key: value for key, value in attrs.items() if value is not None}
 
-class Header:
+    @property
+    def _XmlElement(self) -> Element:
+        elem: Element = Element("prop", attrib=self._attrib)
+        elem.text = self.text
+        return elem
+
+
+class Header(StructuralElement):
     __slots__ = [
-        "_name",
         "creationtool",
         "creationtoolversion",
         "segtype",
@@ -68,7 +115,6 @@ class Header:
         notes: Iterable[Note] | None = None,
         props: Iterable[Prop] | None = None,
     ) -> None:
-        self._name = "header"
         self.creationtool = creationtool
         self.creationtoolversion = creationtoolversion
         self.segtype = segtype
@@ -84,9 +130,40 @@ class Header:
         self.notes = notes
         self.props = props
 
+    @property
+    def _attrib(self) -> dict[str, str]:
+        attrs: dict = {
+            "creationtool": self.creationtool,
+            "creationtoolversion": self.creationtoolversion,
+            "segtype": self.segtype,
+            "o-tmf": self.tmf,
+            "adminlang": self.adminlang,
+            "srclang": self.srclang,
+            "datatype": self.datatype,
+            "o-encoding": self.encoding,
+            "creationdate": datetime.strftime(self.creationdate, "%Y%m%dT%H%M%SZ")
+            if isinstance(self.creationdate, datetime)
+            else self.creationdate,
+            "creationid": self.creationid,
+            "changedate": datetime.strftime(self.changedate, "%Y%m%dT%H%M%SZ")
+            if isinstance(self.changedate, datetime)
+            else self.changedate,
+            "changeid": self.changeid,
+        }
+        return {key: value for key, value in attrs.items() if value is not None}
 
-class Ph:
-    __slots__ = ["x", "_type", "assoc", "content", "_name"]
+    @property
+    def _XmlElement(self) -> Element:
+        elem: Element = Element("header", attrib=self._attrib)
+        for note in self.notes:
+            elem.append(note._XmlElement)
+        for prop in self.props:
+            elem.append(prop._XmlElement)
+        return elem
+
+
+class Ph(InlineElement):
+    __slots__ = ["x", "_type", "assoc", "content"]
 
     def __init__(
         self,
@@ -99,11 +176,25 @@ class Ph:
         self._type = _type
         self.assoc = assoc
         self.content = content
-        self._name = "ph"
+
+    @property
+    def _attrib(self) -> dict[str, str]:
+        attrs: dict = {
+            "x": str(self.x),
+            "type": self._type,
+            "assoc": self.assoc,
+        }
+        return {key: value for key, value in attrs.items() if value is not None}
+
+    @property
+    def _XmlElement(self) -> Element:
+        elem: Element = Element("ph", attrib=self._attrib)
+        elem.text = self.content
+        return elem
 
 
-class It:
-    __slots__ = ["x", "_type", "content", "_name"]
+class It(InlineElement):
+    __slots__ = ["x", "_type", "content"]
 
     def __init__(
         self,
@@ -114,11 +205,24 @@ class It:
         self.x = x
         self._type = _type
         self.content = content
-        self._name = "it"
+
+    @property
+    def _attrib(self) -> dict[str, str]:
+        attrs: dict = {
+            "x": str(self.x),
+            "type": self._type,
+        }
+        return {key: value for key, value in attrs.items() if value is not None}
+
+    @property
+    def _XmlElement(self) -> Element:
+        elem: Element = Element("it", attrib=self._attrib)
+        elem.text = self.content
+        return elem
 
 
-class Hi:
-    __slots__ = ["x", "_type", "content", "_name"]
+class Hi(InlineElement):
+    __slots__ = ["x", "_type", "content"]
 
     def __init__(
         self,
@@ -129,30 +233,72 @@ class Hi:
         self.content = content
         self.x = x
         self._type = _type
-        self._name = "hi"
+
+    @property
+    def _attrib(self) -> dict[str, str]:
+        attrs: dict = {
+            "x": str(self.x),
+            "type": self._type,
+        }
+        return {key: value for key, value in attrs.items() if value is not None}
+
+    @property
+    def _XmlElement(self) -> Element:
+        elem: Element = Element("hi", attrib=self._attrib)
+        elem.text = self.content
+        return elem
 
 
-class Bpt:
-    __slots__ = ["i", "x", "_type", "_name"]
+class Bpt(InlineElement):
+    __slots__ = ["content", "i", "x", "_type"]
 
-    def __init__(self, i: int, x: int | None = None, _type: str | None = None) -> None:
+    def __init__(
+        self, content: str, i: int, x: int | None = None, _type: str | None = None
+    ) -> None:
+        self.content = content
         self.i = i
         self.x = x
         self._type = _type
-        self._name = "bpt"
+
+    @property
+    def _attrib(self) -> dict[str, str]:
+        attrs: dict = {
+            "x": str(self.x),
+            "i": str(self.i),
+            "type": self._type,
+        }
+        return {key: value for key, value in attrs.items() if value is not None}
+
+    @property
+    def _XmlElement(self) -> Element:
+        elem: Element = Element("bpt", attrib=self._attrib)
+        elem.text = self.content
+        return elem
 
 
-class Ept:
-    __slots__ = ["i", "_name"]
+class Ept(InlineElement):
+    __slots__ = ["content", "i"]
 
-    def __init__(self, i: int) -> None:
+    def __init__(self, content: str, i: int) -> None:
+        self.content = content
         self.i = i
-        self._name = "ept"
+
+    @property
+    def _attrib(self) -> dict[str, str]:
+        attrs: dict = {
+            "i": str(self.i),
+        }
+        return {key: value for key, value in attrs.items() if value is not None}
+
+    @property
+    def _XmlElement(self) -> Element:
+        elem: Element = Element("ept", attrib=self._attrib)
+        elem.text = self.content
+        return elem
 
 
-class Tuv:
+class Tuv(StructuralElement):
     __slots__ = [
-        "_name",
         "content",
         "lang",
         "encoding",
@@ -172,7 +318,7 @@ class Tuv:
 
     def __init__(
         self,
-        content: Iterable[str | Ph | It | Hi | Bpt | Ept],
+        content: Iterable[str | InlineElement],
         lang: str,
         encoding: str | None = None,
         datatype: str | None = None,
@@ -188,7 +334,6 @@ class Tuv:
         notes: Iterable[Note] | None = None,
         props: Iterable[Prop] | None = None,
     ) -> None:
-        self._name = "tuv"
         self.content = content
         self.lang = lang
         self.encoding = encoding
@@ -205,10 +350,39 @@ class Tuv:
         self.notes = notes
         self.props = props
 
+    @property
+    def _attrib(self) -> dict[str, str]:
+        attrs: dict = {
+            "{http://www.w3.org/XML/1998/namespace}lang": self.lang,
+            "o-encoding": self.encoding,
+            "datatype": self.datatype,
+            "usagecount": self.usagecount,
+            "creationtool": self.creationtool,
+            "creationtoolversion": self.creationtoolversion,
+            "creationdate": datetime.strftime(self.creationdate, "%Y%m%dT%H%M%SZ")
+            if isinstance(self.creationdate, datetime)
+            else self.creationdate,
+            "creationid": self.creationid,
+            "changedate": datetime.strftime(self.changedate, "%Y%m%dT%H%M%SZ")
+            if isinstance(self.changedate, datetime)
+            else self.changedate,
+            "changeid": self.changeid,
+            "o-tmf": self.tmf,
+        }
+        return {key: value for key, value in attrs.items() if value is not None}
 
-class Tu:
+    @property
+    def _XmlElement(self) -> Element:
+        elem: Element = Element("tuv", attrib=self._attrib)
+        for note in self.notes:
+            elem.append(note._XmlElement)
+        for prop in self.props:
+            elem.append(prop._XmlElement)
+        return elem
+
+
+class Tu(StructuralElement):
     __slots__ = [
-        "_name",
         "tuvs",
         "tuid",
         "encoding",
@@ -248,7 +422,6 @@ class Tu:
         notes: Iterable[Note] | None = None,
         props: Iterable[Prop] | None = None,
     ) -> None:
-        self._name = "tu"
         self.tuid = tuid
         self.tuvs = tuvs
         self.encoding = encoding
@@ -267,10 +440,75 @@ class Tu:
         self.notes = notes
         self.props = props
 
+    @property
+    def _attrib(self) -> dict[str, str]:
+        attrs: dict = {
+            "tuid": str(self.tuid),
+            "o-encoding": self.encoding,
+            "datatype": self.datatype,
+            "usagecount": self.usagecount,
+            "lastusagedate": self.lastusagedate,
+            "creationtool": self.creationtool,
+            "creationtoolversion": self.creationtoolversion,
+            "creationdate": datetime.strftime(self.creationdate, "%Y%m%dT%H%M%SZ")
+            if isinstance(self.creationdate, datetime)
+            else self.creationdate,
+            "creationid": self.creationid,
+            "changedate": datetime.strftime(self.changedate, "%Y%m%dT%H%M%SZ")
+            if isinstance(self.changedate, datetime)
+            else self.changedate,
+            "segtype": self.segtype,
+            "srclang": self.srclang,
+            "changeid": self.changeid,
+            "o-tmf": self.tmf,
+        }
+        return {key: value for key, value in attrs.items() if value is not None}
 
-class Tmx:
-    __slots__ = ["_header", "tus"]
+    @property
+    def _XmlElement(self) -> Element:
+        elem: Element = Element("tu", attrib=self._attrib)
+        for note in self.notes:
+            elem.append(note._XmlElement)
+        for prop in self.props:
+            elem.append(prop._XmlElement)
+        return elem
 
-    def __init__(self, _header: Header, tus: Iterable[Tu]) -> None:
-        self.header = _header
+
+class Tmx(StructuralElement):
+    __slots__ = ["header", "tus"]
+
+    def __init__(self, header: Header, tus: Iterable[Tu]) -> None:
+        self.header = header
         self.tus = tus
+
+    def Dump(self, file: PathLike) -> None:
+        tmx: Element = Element("tmx", attrib={"version": "1.4"})
+        header: Element = SubElement(tmx, "header", self.header._attrib)
+        for note in self.header.notes:
+            header.append(note._XmlElement)
+        for prop in self.header.props:
+            header.append(prop._XmlElement)
+        body: Element = SubElement(tmx, "body")
+        for tu in self.tus:
+            _tu: Element = SubElement(body, "tu", tu._attrib)
+            for note in tu.notes:
+                _tu.append(note._XmlElement)
+            for prop in tu.props:
+                _tu.append(prop._XmlElement)
+            for tuv in tu.tuvs:
+                _tuv: Element = SubElement(_tu, "tuv", tuv._attrib)
+                for note in tu.notes:
+                    _tuv.append(note._XmlElement)
+                for prop in tu.props:
+                    _tuv.append(prop._XmlElement)
+                seg: Element = SubElement(_tuv, "seg")
+                for i in tuv.content:
+                    a = (
+                        SubElement(seg, "fake")
+                        if isinstance(i, str)
+                        else SubElement(seg, i._XmlElement.tag, i._attrib)
+                    )
+                    a.text = i._XmlElement.text if not isinstance(i, str) else i
+        tree = ElementTree(tmx)
+        indent(tree, "    ")
+        tree.write(file)
