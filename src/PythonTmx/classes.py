@@ -1,9 +1,10 @@
 from datetime import datetime
 from os import PathLike
-from typing import Iterable, Literal, Protocol
+from typing import Iterable, Literal, Protocol, runtime_checkable
 from xml.etree.ElementTree import Element, ElementTree, SubElement, indent
 
 
+@runtime_checkable
 class InlineElement(Protocol):
     @property
     def _attrib(self) -> dict[str, str]:
@@ -378,6 +379,16 @@ class Tuv(StructuralElement):
             elem.append(note._XmlElement)
         for prop in self.props:
             elem.append(prop._XmlElement)
+        seg: Element = SubElement(elem, "seg")
+        for run in self.content:
+            if isinstance(run, InlineElement):
+                seg.append(run._XmlElement)
+                seg = run._XmlElement
+            else:
+                if seg.text is None:
+                    seg.text = run
+                else:
+                    seg.tail = run
         return elem
 
 
@@ -443,7 +454,7 @@ class Tu(StructuralElement):
     @property
     def _attrib(self) -> dict[str, str]:
         attrs: dict = {
-            "tuid": str(self.tuid),
+            "tuid": str(self.tuid) if self.tuid is not None else None,
             "o-encoding": self.encoding,
             "datatype": self.datatype,
             "usagecount": self.usagecount,
@@ -471,6 +482,8 @@ class Tu(StructuralElement):
             elem.append(note._XmlElement)
         for prop in self.props:
             elem.append(prop._XmlElement)
+        for tuv in self.tuvs:
+            elem.append(tuv._XmlElement)
         return elem
 
 
@@ -483,32 +496,10 @@ class Tmx(StructuralElement):
 
     def Dump(self, file: PathLike) -> None:
         tmx: Element = Element("tmx", attrib={"version": "1.4"})
-        header: Element = SubElement(tmx, "header", self.header._attrib)
-        for note in self.header.notes:
-            header.append(note._XmlElement)
-        for prop in self.header.props:
-            header.append(prop._XmlElement)
+        tmx.append(self.header._XmlElement)
         body: Element = SubElement(tmx, "body")
         for tu in self.tus:
-            _tu: Element = SubElement(body, "tu", tu._attrib)
-            for note in tu.notes:
-                _tu.append(note._XmlElement)
-            for prop in tu.props:
-                _tu.append(prop._XmlElement)
-            for tuv in tu.tuvs:
-                _tuv: Element = SubElement(_tu, "tuv", tuv._attrib)
-                for note in tu.notes:
-                    _tuv.append(note._XmlElement)
-                for prop in tu.props:
-                    _tuv.append(prop._XmlElement)
-                seg: Element = SubElement(_tuv, "seg")
-                for i in tuv.content:
-                    a = (
-                        SubElement(seg, "fake")
-                        if isinstance(i, str)
-                        else SubElement(seg, i._XmlElement.tag, i._attrib)
-                    )
-                    a.text = i._XmlElement.text if not isinstance(i, str) else i
+            body.append(tu._XmlElement)
         tree = ElementTree(tmx)
         indent(tree, "    ")
         tree.write(file)
