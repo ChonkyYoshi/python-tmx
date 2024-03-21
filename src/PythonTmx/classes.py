@@ -15,6 +15,7 @@ class InlineElement(Protocol):
         raise NotImplementedError
 
 
+@runtime_checkable
 class StructuralElement(Protocol):
     @property
     def _attrib(self) -> dict[str, str]:
@@ -113,8 +114,8 @@ class Header(StructuralElement):
         creationid: str | None = None,
         changedate: str | None = None,
         changeid: str | None = None,
-        notes: Iterable[Note] | None = None,
-        props: Iterable[Prop] | None = None,
+        notes: Iterable[Note] | None = [],
+        props: Iterable[Prop] | None = [],
     ) -> None:
         self.creationtool = creationtool
         self.creationtoolversion = creationtoolversion
@@ -332,8 +333,8 @@ class Tuv(StructuralElement):
         changedate: str | datetime | None = None,
         changeid: str | None = None,
         tmf: str | None = None,
-        notes: Iterable[Note] | None = None,
-        props: Iterable[Prop] | None = None,
+        notes: Iterable[Note] | None = [],
+        props: Iterable[Prop] | None = [],
     ) -> None:
         self.content = content
         self.lang = lang
@@ -380,15 +381,31 @@ class Tuv(StructuralElement):
         for prop in self.props:
             elem.append(prop._XmlElement)
         seg: Element = SubElement(elem, "seg")
-        for run in self.content:
-            if isinstance(run, InlineElement):
-                seg.append(run._XmlElement)
-                seg = run._XmlElement
-            else:
-                if seg.text is None:
+        # content: list = [
+        #     run._XmlElement if isinstance(run, InlineElement) else run
+        #     for run in self.content
+        # ]
+        attach: Element = None
+        for id, run in enumerate(self.content):
+            if id == 0:
+                if isinstance(run, str):
                     seg.text = run
                 else:
-                    seg.tail = run
+                    attach = run._XmlElement
+                    seg.append(attach)
+            else:
+                if isinstance(run, str):
+                    if attach is None:
+                        seg.text += run
+                    else:
+                        if attach.tail is None:
+                            attach.tail = run
+                        else:
+                            attach.tail += run
+                else:
+                    new = run._XmlElement
+                    seg.append(new)
+                    attach = new
         return elem
 
 
@@ -430,8 +447,8 @@ class Tu(StructuralElement):
         changeid: str | None = None,
         tmf: str | None = None,
         srclang: str | None = None,
-        notes: Iterable[Note] | None = None,
-        props: Iterable[Prop] | None = None,
+        notes: Iterable[Note] | None = [],
+        props: Iterable[Prop] | None = [],
     ) -> None:
         self.tuid = tuid
         self.tuvs = tuvs
@@ -502,4 +519,4 @@ class Tmx(StructuralElement):
             body.append(tu._XmlElement)
         tree = ElementTree(tmx)
         indent(tree, "    ")
-        tree.write(file)
+        tree.write(file, encoding="utf-8", xml_declaration=True)

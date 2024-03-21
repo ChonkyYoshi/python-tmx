@@ -29,7 +29,7 @@ def ParseNotes(element: Element) -> list[Note]:
     ]
 
 
-def ParseHeader(header_element: Element) -> Header:
+def LoadHeader(header_element: Element) -> Header:
     header: Header = Header(
         creationtool=header_element.get("creationtool"),
         creationtoolversion=header_element.get("creationtoolversion"),
@@ -95,69 +95,69 @@ def ParseSeg(element: Element):
         return [run for run in runs if run is not None]
 
 
-def ParseTmx(file: PathLike) -> Tmx:
+def LoadTmx(file: PathLike) -> Tmx:
     tmx_tree: ElementTree = parse(file)
     tmx_root: Element = tmx_tree.getroot()
-    header: Header = ParseHeader(tmx_root.find("header"))
+    header: Header = LoadHeader(tmx_root.find("header"))
     tmx: Tmx = Tmx(header=header, tus=list())
-    for _tu in tmx_root.iter("tu"):
+    for tmx_tu in tmx_root.iter("tu"):
         tu: Tu = Tu(
             tuvs=list(),
-            tuid=int(_tu.get("tuid")) if _tu.get("tuid") is not None else None,
-            encoding=_tu.get("o-encoding"),
-            datatype=_tu.get("datatype"),
-            usagecount=_tu.get("usagecount"),
-            lastusagedate=_tu.get("lastusagedate"),
-            creationtool=_tu.get("creationtool"),
-            creationtoolversion=_tu.get("creationtoolversion"),
+            tuid=int(tmx_tu.get("tuid")) if tmx_tu.get("tuid") is not None else None,
+            encoding=tmx_tu.get("o-encoding"),
+            datatype=tmx_tu.get("datatype"),
+            usagecount=tmx_tu.get("usagecount"),
+            lastusagedate=tmx_tu.get("lastusagedate"),
+            creationtool=tmx_tu.get("creationtool"),
+            creationtoolversion=tmx_tu.get("creationtoolversion"),
             creationdate=datetime.strptime(
-                _tu.get("creationdate"), "%Y%m%dT%H%M%SZ"
+                tmx_tu.get("creationdate"), "%Y%m%dT%H%M%SZ"
             ).replace(tzinfo=UTC)
-            if _tu.get("creationdate") is not None
+            if tmx_tu.get("creationdate") is not None
             else None,
-            creationid=_tu.get("creationid"),
+            creationid=tmx_tu.get("creationid"),
             changedate=datetime.strptime(
-                _tu.get("changedate"), "%Y%m%dT%H%M%SZ"
+                tmx_tu.get("changedate"), "%Y%m%dT%H%M%SZ"
             ).replace(tzinfo=UTC)
-            if _tu.get("changedate") is not None
+            if tmx_tu.get("changedate") is not None
             else None,
-            segtype=_tu.get("segtype"),
-            changeid=_tu.get("changeid"),
-            tmf=_tu.get("o-tmf"),
-            srclang=_tu.get("srclang"),
-            notes=ParseNotes(_tu),
-            props=ParseProps(_tu),
+            segtype=tmx_tu.get("segtype"),
+            changeid=tmx_tu.get("changeid"),
+            tmf=tmx_tu.get("o-tmf"),
+            srclang=tmx_tu.get("srclang"),
+            notes=ParseNotes(tmx_tu),
+            props=ParseProps(tmx_tu),
         )
-        for _tuv in _tu.iter("tuv"):
+        for tmx_tuv in tmx_tu.iter("tuv"):
             tu.tuvs.append(
                 Tuv(
-                    content=ParseSeg(_tuv.find("seg")),
-                    lang=_tuv.get("{http://www.w3.org/XML/1998/namespace}lang"),
-                    datatype=_tuv.get("datatype"),
-                    usagecount=_tuv.get("usagecount"),
-                    lastusagedate=_tuv.get("lastusagedate"),
-                    creationtool=_tuv.get("creationtool"),
-                    creationtoolversion=_tuv.get("creationtoolversion"),
+                    content=ParseSeg(tmx_tuv.find("seg")),
+                    lang=tmx_tuv.get("{http://www.w3.org/XML/1998/namespace}lang"),
+                    datatype=tmx_tuv.get("datatype"),
+                    usagecount=tmx_tuv.get("usagecount"),
+                    lastusagedate=tmx_tuv.get("lastusagedate"),
+                    creationtool=tmx_tuv.get("creationtool"),
+                    creationtoolversion=tmx_tuv.get("creationtoolversion"),
                     creationdate=datetime.strptime(
-                        _tuv.get("creationdate"), "%Y%m%dT%H%M%SZ"
+                        tmx_tuv.get("creationdate"), "%Y%m%dT%H%M%SZ"
                     ).replace(tzinfo=UTC)
-                    if _tuv.get("creationdate") is not None
+                    if tmx_tuv.get("creationdate") is not None
                     else None,
-                    creationid=_tuv.get("creationid"),
+                    creationid=tmx_tuv.get("creationid"),
                     changedate=datetime.strptime(
-                        _tuv.get("changedate"), "%Y%m%dT%H%M%SZ"
+                        tmx_tuv.get("changedate"), "%Y%m%dT%H%M%SZ"
                     ).replace(tzinfo=UTC)
-                    if _tuv.get("changedate") is not None
+                    if tmx_tuv.get("changedate") is not None
                     else None,
-                    changeid=_tuv.get("changeid"),
-                    tmf=_tuv.get("o-tmf"),
-                    notes=ParseNotes(_tuv),
-                    props=ParseProps(_tuv),
+                    changeid=tmx_tuv.get("changeid"),
+                    tmf=tmx_tuv.get("o-tmf"),
+                    notes=ParseNotes(tmx_tuv),
+                    props=ParseProps(tmx_tuv),
                 )
             )
         tmx.tus.append(tu)
     return tmx
 
 
-a = ParseTmx("example.tmx")
+a: Tmx = LoadTmx("example.tmx")
 a.Dump("a.tmx")
