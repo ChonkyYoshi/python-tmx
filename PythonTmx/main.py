@@ -3,10 +3,19 @@ from os import PathLike
 from typing import Iterable
 from xml.etree.ElementTree import Element, ElementTree, parse
 
-from classes import Bpt, Ept, Header, InlineElement, Note, Ph, Prop, Tmx, Tu, Tuv
+from classes import (Bpt, Ept, Header, InlineElement, Note, Ph, Prop, Tmx, Tu,
+                     Tuv)
 
 
 def ParseProps(element: Element) -> list[Prop]:
+    """
+
+    Args:
+      element: Element: 
+
+    Returns:
+
+    """
     return [
         Prop(
             text=_prop.text,
@@ -19,6 +28,14 @@ def ParseProps(element: Element) -> list[Prop]:
 
 
 def ParseNotes(element: Element) -> list[Note]:
+    """
+
+    Args:
+      element: Element: 
+
+    Returns:
+
+    """
     return [
         Note(
             text=_note.text,
@@ -30,6 +47,14 @@ def ParseNotes(element: Element) -> list[Note]:
 
 
 def LoadHeader(header_element: Element) -> Header:
+    """
+
+    Args:
+      header_element: Element: 
+
+    Returns:
+
+    """
     header: Header = Header(
         creationtool=header_element.get("creationtool"),
         creationtoolversion=header_element.get("creationtoolversion"),
@@ -58,6 +83,14 @@ def LoadHeader(header_element: Element) -> Header:
 
 
 def ParseSeg(element: Element):
+    """
+
+    Args:
+      element: Element: 
+
+    Returns:
+
+    """
     for seg in element.iter():
         runs: Iterable[str | InlineElement] = list()
         for _tag in seg.iter():
@@ -96,6 +129,14 @@ def ParseSeg(element: Element):
 
 
 def LoadTmx(file: PathLike) -> Tmx:
+    """
+
+    Args:
+      file: PathLike: 
+
+    Returns:
+
+    """
     tmx_tree: ElementTree = parse(file)
     tmx_root: Element = tmx_tree.getroot()
     header: Header = LoadHeader(tmx_root.find("header"))
@@ -157,7 +198,3 @@ def LoadTmx(file: PathLike) -> Tmx:
             )
         tmx.tus.append(tu)
     return tmx
-
-
-a: Tmx = LoadTmx("example.tmx")
-a.Dump("a.tmx")
