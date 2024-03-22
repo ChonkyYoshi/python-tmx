@@ -16,7 +16,6 @@ class InlineElement(Protocol):
         """
         raise NotImplementedError
 
-    
     def _XmlElement(self) -> Element:
         """
         Private method to convert the object into a XML ElementTree API Element.
@@ -37,6 +36,7 @@ class StructuralElement(Protocol):
         Discards any attribute without a value
         """
         raise NotImplementedError
+
     def _XmlElement(self) -> Element:
         """
         Private method to convert the object into a XML ElementTree API Element.
@@ -44,9 +44,6 @@ class StructuralElement(Protocol):
         Element's tag is taken the object's name in lwoercase (Tmx -> <tmx>) and element's attributes are created using the _attrib property
         """
         raise NotImplementedError
-
-
-
 
 
 class Note(StructuralElement):
@@ -60,11 +57,12 @@ class Note(StructuralElement):
             The actual content of the note
     Optional:
         lang : str
-            The language of the note's content 
-            Note: When exporting to a tmx file, this becomes the xml:lang attribute 
+            The language of the note's content
+            Note: When exporting to a tmx file, this becomes the xml:lang attribute
         encoding : str
             The enconding of the note's content
     """
+
     __slots__ = ["content", "lang", "encoding"]
 
     def __init__(
@@ -82,11 +80,11 @@ class Note(StructuralElement):
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    
     def _XmlElement(self) -> Element:
         elem: Element = Element("note", attrib=self._attrib)
         elem.text = self.content
         return elem
+
 
 class Prop(StructuralElement):
     """
@@ -107,6 +105,7 @@ class Prop(StructuralElement):
         encoding : str
             The enconding of the prop's content
     """
+
     __slots__ = ["content", "_type", "lang", "encoding"]
 
     def __init__(
@@ -130,7 +129,6 @@ class Prop(StructuralElement):
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    
     def _XmlElement(self) -> Element:
         elem: Element = Element("prop", attrib=self._attrib)
         elem.text = str(self.content)
@@ -139,30 +137,36 @@ class Prop(StructuralElement):
 
 class Header(StructuralElement):
     """
-    Class used to represent a <header> object
+    The `<header>` object
 
-    Attributes
-    --------
-    Required:
-        creationtool : str
-            Tool used to create the tmx file, can be PythonTmx if creating from scratch, or the name of a CAT Tool like MemoQ if using an external tmx file.
-        creationtoolversion : str
-            Version of the tool used to create the Tmx file.
-        segtype : "block", "paragraph", "sentence", "phrase"
-            Default segmentation if not defined at a tu level.
-            When defining at a header level, it is better to use either paragraph or block unless you know for sure your tmx will be segmented in sentences or phrase.
-            Use block if the content segmentation doesn't fall into any of the the other three categories
-        tmf: str
-            Format of the original Translation Memory where the content was stored.
-            Note: when exporting to a tmx file, this becomes the o-tmf attribute
+    Contains general info regarding a tmx file. For many attributes,
+    if not defined at the tu/tuv level, the attributes from the header
+    will be used as the default.
+
+    Attributes:
+        creationtool:
+            A string that represents the tool used to create the tmx file
+        creationtoolversion:
+            A string that represents the version of the tool used to
+            create the tmx
+        segtype:
+            One of "block", "paragraph", "sentence" or "phrase".
+            Represents the segmentation of the content.
+            Use "phrase" for simple list of words or small non-verbal sentences.
+            Use "sentence" if each segment contain a single sentence.
+            Use "paragraph" if there can be multiple sentences in a segment.
+            Use "block" if none of the other options is adequate.
+        tmf:
+            A string that represents the format of the original
+            translation memory where the contents of the file were stored.
         adminlang:
-            Language for <note> and <prop> elements unless the elment itself has one defined.
-            Note: This is not case-sensitive
+            Default language for any content not contained in segments.
+            Namely inside props and notes, unless specified otherwise.
         srclang:
-            Source Language. If a tu doesn't have a specific srlang defined, it uses this one. Any tuv whose lang attrbiute matches this attribute will be considered the source segment.
-
-            Can be set *all* if for some reason there is no need actual source language.
+            Default source language for a tu unless specified otherwise.
+            can be set "*all*" if there is no source language.
     """
+
     __slots__ = [
         "creationtool",
         "creationtoolversion",
@@ -223,18 +227,21 @@ class Header(StructuralElement):
             "srclang": self.srclang,
             "datatype": self.datatype,
             "o-encoding": self.encoding,
-            "creationdate": datetime.strftime(self.creationdate, "%Y%m%dT%H%M%SZ")
-            if isinstance(self.creationdate, datetime)
-            else self.creationdate,
+            "creationdate": (
+                datetime.strftime(self.creationdate, "%Y%m%dT%H%M%SZ")
+                if isinstance(self.creationdate, datetime)
+                else self.creationdate
+            ),
             "creationid": self.creationid,
-            "changedate": datetime.strftime(self.changedate, "%Y%m%dT%H%M%SZ")
-            if isinstance(self.changedate, datetime)
-            else self.changedate,
+            "changedate": (
+                datetime.strftime(self.changedate, "%Y%m%dT%H%M%SZ")
+                if isinstance(self.changedate, datetime)
+                else self.changedate
+            ),
             "changeid": self.changeid,
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    
     def _XmlElement(self) -> Element:
         elem: Element = Element("header", attrib=self._attrib)
         for note in self.notes:
@@ -268,7 +275,6 @@ class Ph(InlineElement):
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    
     def _XmlElement(self) -> Element:
         elem: Element = Element("ph", attrib=self._attrib)
         elem.text = self.content
@@ -296,7 +302,6 @@ class It(InlineElement):
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    
     def _XmlElement(self) -> Element:
         elem: Element = Element("it", attrib=self._attrib)
         elem.text = self.content
@@ -324,7 +329,6 @@ class Hi(InlineElement):
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    
     def _XmlElement(self) -> Element:
         elem: Element = Element("hi", attrib=self._attrib)
         elem.text = self.content
@@ -351,7 +355,6 @@ class Bpt(InlineElement):
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    
     def _XmlElement(self) -> Element:
         elem: Element = Element("bpt", attrib=self._attrib)
         elem.text = self.content
@@ -372,7 +375,6 @@ class Ept(InlineElement):
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    
     def _XmlElement(self) -> Element:
         elem: Element = Element("ept", attrib=self._attrib)
         elem.text = self.content
@@ -441,19 +443,22 @@ class Tuv(StructuralElement):
             "usagecount": self.usagecount,
             "creationtool": self.creationtool,
             "creationtoolversion": self.creationtoolversion,
-            "creationdate": datetime.strftime(self.creationdate, "%Y%m%dT%H%M%SZ")
-            if isinstance(self.creationdate, datetime)
-            else self.creationdate,
+            "creationdate": (
+                datetime.strftime(self.creationdate, "%Y%m%dT%H%M%SZ")
+                if isinstance(self.creationdate, datetime)
+                else self.creationdate
+            ),
             "creationid": self.creationid,
-            "changedate": datetime.strftime(self.changedate, "%Y%m%dT%H%M%SZ")
-            if isinstance(self.changedate, datetime)
-            else self.changedate,
+            "changedate": (
+                datetime.strftime(self.changedate, "%Y%m%dT%H%M%SZ")
+                if isinstance(self.changedate, datetime)
+                else self.changedate
+            ),
             "changeid": self.changeid,
             "o-tmf": self.tmf,
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    
     def _XmlElement(self) -> Element:
         elem: Element = Element("tuv", attrib=self._attrib)
         for note in self.notes:
@@ -554,13 +559,17 @@ class Tu(StructuralElement):
             "lastusagedate": self.lastusagedate,
             "creationtool": self.creationtool,
             "creationtoolversion": self.creationtoolversion,
-            "creationdate": datetime.strftime(self.creationdate, "%Y%m%dT%H%M%SZ")
-            if isinstance(self.creationdate, datetime)
-            else self.creationdate,
+            "creationdate": (
+                datetime.strftime(self.creationdate, "%Y%m%dT%H%M%SZ")
+                if isinstance(self.creationdate, datetime)
+                else self.creationdate
+            ),
             "creationid": self.creationid,
-            "changedate": datetime.strftime(self.changedate, "%Y%m%dT%H%M%SZ")
-            if isinstance(self.changedate, datetime)
-            else self.changedate,
+            "changedate": (
+                datetime.strftime(self.changedate, "%Y%m%dT%H%M%SZ")
+                if isinstance(self.changedate, datetime)
+                else self.changedate
+            ),
             "segtype": self.segtype,
             "srclang": self.srclang,
             "changeid": self.changeid,
@@ -568,7 +577,6 @@ class Tu(StructuralElement):
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    
     def _XmlElement(self) -> Element:
         elem: Element = Element("tu", attrib=self._attrib)
         for note in self.notes:
