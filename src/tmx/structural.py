@@ -1,4 +1,5 @@
 """structural tags definitions"""
+
 from dataclasses import dataclass, field
 from lxml.etree import Element, _Element, ElementTree, _ElementTree
 from typing import Literal
@@ -177,7 +178,7 @@ class tuv:
                             value = value - value.utcoffset()
                         tmx_attrib[attribute] = value.strftime("%Y%m%dT%H%M%SZ")
                     else:
-                        if not match(r"\d{8}T\d{6}"):
+                        if not match(r"\d{8}T\d{6}", value):
                             raise ValueError(f"{attribute} format is not correct.")
                         tmx_attrib[attribute] = value
                 elif attribute == "otmf":
