@@ -1,66 +1,50 @@
 from datetime import datetime
 from os import PathLike
 from typing import Iterable, Literal, Protocol, runtime_checkable
-from xml.etree.ElementTree import Element, ElementTree, SubElement, indent
+from xml.etree.ElementTree import Element, ElementTree, SubElement
 
 
 @runtime_checkable
-class InlineElement(Protocol):
+class TmxElement(Protocol):
 
-    @property
-    def _attrib(self) -> dict[str, str]:
+    def _make_xml_attrib(self) -> dict[str, str]:
         """
-        Private property method used to create XML ElementTree API compliant attribute dict based on the class attributes.
+        Private method.
 
-        Discards any attribute without a value
-        """
-        raise NotImplementedError
-
-    def _XmlElement(self) -> Element:
-        """
-        Private method to convert the object into a XML ElementTree API Element.
-
-        Element's tag is taken the object's name in lwoercase (Tmx -> <tmx>) and element's attributes are created using the _attrib property
+        Creates the attribute dict for the _make_xml_element method.
+        Keys have the name adjusted as needed to be tmx compliant
+        (e.g. encoding -> o-encoding)
         """
         raise NotImplementedError
 
-
-@runtime_checkable
-class StructuralElement(Protocol):
-
-    @property
-    def _attrib(self) -> dict[str, str]:
+    def _make_xml_element(self, force:bool) -> Element:
         """
-        Private property method used to create XML ElementTree API compliant attribute dict based on the class attributes.
+        Private method.
 
-        Discards any attribute without a value
-        """
-        raise NotImplementedError
+        Convert an Element into a XML Element Tree Element.
+        Object's content becomes the Element's text.
+        Attributes are from the _make_xml_attrib method.
 
-    def _XmlElement(self) -> Element:
-        """
-        Private method to convert the object into a XML ElementTree API Element.
-
-        Element's tag is taken the object's name in lwoercase (Tmx -> <tmx>) and element's attributes are created using the _attrib property
+        Note: Setting 'force' to True will call str(self.content)
+        if the content is not a string object to avoid serializing errors.
         """
         raise NotImplementedError
 
 
-class Note(StructuralElement):
+class Note(TmxElement):
     """
-    Class used to represent a <note> object
+    Class used to represent a <note> tag
 
     Attributes
     --------
     Required:
-        content : str
+        content: str
             The actual content of the note
     Optional:
-        lang : str
+        lang: str
             The language of the note's content
-            Note: When exporting to a tmx file, this becomes the xml:lang attribute
         encoding : str
-            The enconding of the note's content
+            The encoding of the note's content
     """
 
     __slots__ = ["content", "lang", "encoding"]
@@ -68,41 +52,41 @@ class Note(StructuralElement):
     def __init__(
         self, content: str, lang: str | None = None, encoding: str | None = None
     ) -> None:
-        self.text = content
+        self.content = content
         self.lang = lang
         self.encoding = encoding
 
-    @property
-    def _attrib(self) -> dict[str, str]:
-        attrs: dict = {
+    def _make_xml_attrib(self) -> dict[str, str]:
+        attrs: dict[str, str] = {
             "{http://www.w3.org/XML/1998/namespace}lang": self.lang,
             "o-encoding": self.encoding,
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    def _XmlElement(self) -> Element:
-        elem: Element = Element("note", attrib=self._attrib)
-        elem.text = self.content
+    def _make_xml_element(self) -> Element:
+        elem = Element("note", attrib=self._make_xml_attrib())
+        if not isinstance(self.content, str):
+            elem.text = str(self.content)
+        else:
+            elem.text = self.content
         return elem
 
 
-class Prop(StructuralElement):
+class Prop(TmxElement):
     """
-    Class used to represent a <prop> object
+    Class used to represent a <prop> tag
 
     Attributes
     --------
     Required:
-        content : str
-            The actual content of the prop. Can be anything as long as it has a __str__ representation
+        content: str
+            The actual content of the prop.
         _type: str
             The type of the prop. Usually in the form of "x-foo"
-            Note: when exporting to a tmx file, this becomes the type attribute
     Optional:
-        lang : str
+        lang: str
             The language of the prop's content
-            Note: When exporting to a tmx file, this becomes the xml:lang attribute
-        encoding : str
+        encoding: str
             The enconding of the prop's content
     """
 
@@ -115,13 +99,12 @@ class Prop(StructuralElement):
         lang: str | None = None,
         encoding: str | None = None,
     ) -> None:
-        self.text = content
+        self.content = content
         self._type = _type
         self.lang = lang
         self.encoding = encoding
 
-    @property
-    def _attrib(self) -> dict[str, str]:
+    def _make_xml_attrib(self) -> dict[str, str]:
         attrs: dict = {
             "{http://www.w3.org/XML/1998/namespace}lang": self.lang,
             "type": self._type,
@@ -129,13 +112,15 @@ class Prop(StructuralElement):
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    def _XmlElement(self) -> Element:
-        elem: Element = Element("prop", attrib=self._attrib)
-        elem.text = str(self.content)
+    def _make_xml_element(self) -> Element:
+        elem: Element = Element("prop", attrib=self._make_xml_attrib())
+        if not isinstance(self.content, str):
+            elem.text = str(self.content)
+        else:
+            elem.text = self.content
         return elem
 
-
-class Header(StructuralElement):
+class Header(Element):
     """
     The `<header>` object
 
@@ -217,7 +202,7 @@ class Header(StructuralElement):
         self.props = props
 
     @property
-    def _attrib(self) -> dict[str, str]:
+    def _make_xml_attrib(self) -> dict[str, str]:
         attrs: dict = {
             "creationtool": self.creationtool,
             "creationtoolversion": self.creationtoolversion,
@@ -242,16 +227,16 @@ class Header(StructuralElement):
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    def _XmlElement(self) -> Element:
-        elem: Element = Element("header", attrib=self._attrib)
+    def _make_xml_element(self) -> Element:
+        elem: Element = Element("header", attrib=self._make_xml_attrib())
         for note in self.notes:
-            elem.append(note._XmlElement())
+            elem.append(note._make_xml_element())
         for prop in self.props:
-            elem.append(prop._XmlElement())
+            elem.append(prop._make_xml_element())
         return elem
 
 
-class Ph(InlineElement):
+class Ph(Element):
     __slots__ = ["x", "_type", "assoc", "content"]
 
     def __init__(
@@ -267,7 +252,7 @@ class Ph(InlineElement):
         self.content = content
 
     @property
-    def _attrib(self) -> dict[str, str]:
+    def _make_xml_make_xml_attrib(self) -> dict[str, str]:
         attrs: dict = {
             "x": str(self.x),
             "type": self._type,
@@ -275,13 +260,13 @@ class Ph(InlineElement):
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    def _XmlElement(self) -> Element:
-        elem: Element = Element("ph", attrib=self._attrib)
+    def _make_xml_element(self) -> Element:
+        elem: Element = Element("ph", attrib=self._make_xml_make_xml_attrib)
         elem.text = self.content
         return elem
 
 
-class It(InlineElement):
+class It(Element):
     __slots__ = ["x", "_type", "content"]
 
     def __init__(
@@ -295,20 +280,20 @@ class It(InlineElement):
         self.content = content
 
     @property
-    def _attrib(self) -> dict[str, str]:
+    def _make_xml_make_xml_attrib(self) -> dict[str, str]:
         attrs: dict = {
             "x": str(self.x),
             "type": self._type,
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    def _XmlElement(self) -> Element:
-        elem: Element = Element("it", attrib=self._attrib)
+    def _make_xml_element(self) -> Element:
+        elem: Element = Element("it", attrib=self._make_xml_make_xml_attrib)
         elem.text = self.content
         return elem
 
 
-class Hi(InlineElement):
+class Hi(Element):
     __slots__ = ["x", "_type", "content"]
 
     def __init__(
@@ -322,20 +307,20 @@ class Hi(InlineElement):
         self._type = _type
 
     @property
-    def _attrib(self) -> dict[str, str]:
+    def _make_xml_make_xml_attrib(self) -> dict[str, str]:
         attrs: dict = {
             "x": str(self.x),
             "type": self._type,
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    def _XmlElement(self) -> Element:
-        elem: Element = Element("hi", attrib=self._attrib)
+    def _make_xml_element(self) -> Element:
+        elem: Element = Element("hi", attrib=self._make_xml_make_xml_attrib)
         elem.text = self.content
         return elem
 
 
-class Bpt(InlineElement):
+class Bpt(Element):
     __slots__ = ["content", "i", "x", "_type"]
 
     def __init__(
@@ -347,7 +332,7 @@ class Bpt(InlineElement):
         self._type = _type
 
     @property
-    def _attrib(self) -> dict[str, str]:
+    def _make_xml_make_xml_attrib(self) -> dict[str, str]:
         attrs: dict = {
             "x": str(self.x),
             "i": str(self.i),
@@ -355,13 +340,13 @@ class Bpt(InlineElement):
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    def _XmlElement(self) -> Element:
-        elem: Element = Element("bpt", attrib=self._attrib)
+    def _make_xml_element(self) -> Element:
+        elem: Element = Element("bpt", attrib=self._make_xml_make_xml_attrib)
         elem.text = self.content
         return elem
 
 
-class Ept(InlineElement):
+class Ept(Element):
     __slots__ = ["content", "i"]
 
     def __init__(self, content: str, i: int) -> None:
@@ -369,19 +354,19 @@ class Ept(InlineElement):
         self.i = i
 
     @property
-    def _attrib(self) -> dict[str, str]:
+    def _make_xml_make_xml_attrib(self) -> dict[str, str]:
         attrs: dict = {
             "i": str(self.i),
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    def _XmlElement(self) -> Element:
-        elem: Element = Element("ept", attrib=self._attrib)
+    def _make_xml_element(self) -> Element:
+        elem: Element = Element("ept", attrib=self._make_xml_make_xml_attrib)
         elem.text = self.content
         return elem
 
 
-class Tuv(StructuralElement):
+class Tuv(Element):
     __slots__ = [
         "content",
         "lang",
@@ -402,7 +387,7 @@ class Tuv(StructuralElement):
 
     def __init__(
         self,
-        content: Iterable[str | InlineElement],
+        content: Iterable[str | Element],
         lang: str,
         encoding: str | None = None,
         datatype: str | None = None,
@@ -435,7 +420,7 @@ class Tuv(StructuralElement):
         self.props = props
 
     @property
-    def _attrib(self) -> dict[str, str]:
+    def _make_xml_attrib(self) -> dict[str, str]:
         attrs: dict = {
             "{http://www.w3.org/XML/1998/namespace}lang": self.lang,
             "o-encoding": self.encoding,
@@ -459,12 +444,12 @@ class Tuv(StructuralElement):
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    def _XmlElement(self) -> Element:
-        elem: Element = Element("tuv", attrib=self._attrib)
+    def _make_xml_element(self) -> Element:
+        elem: Element = Element("tuv", attrib=self._make_xml_attrib())
         for note in self.notes:
-            elem.append(note._XmlElement())
+            elem.append(note._make_xml_element())
         for prop in self.props:
-            elem.append(prop._XmlElement())
+            elem.append(prop._make_xml_element())
         seg: Element = SubElement(elem, "seg")
         attach: Element = None
         for id, run in enumerate(self.content):
@@ -472,7 +457,7 @@ class Tuv(StructuralElement):
                 if isinstance(run, str):
                     seg.text = run
                 else:
-                    attach = run._XmlElement()
+                    attach = run._make_xml_element()
                     seg.append(attach)
             else:
                 if isinstance(run, str):
@@ -484,13 +469,13 @@ class Tuv(StructuralElement):
                         else:
                             attach.tail += run
                 else:
-                    new = run._XmlElement()
+                    new = run._make_xml_element()
                     seg.append(new)
                     attach = new
         return elem
 
 
-class Tu(StructuralElement):
+class Tu(Element):
     __slots__ = [
         "tuvs",
         "tuid",
@@ -550,7 +535,7 @@ class Tu(StructuralElement):
         self.props = props
 
     @property
-    def _attrib(self) -> dict[str, str]:
+    def _make_xml_attrib(self) -> dict[str, str]:
         attrs: dict = {
             "tuid": str(self.tuid) if self.tuid is not None else None,
             "o-encoding": self.encoding,
@@ -577,18 +562,18 @@ class Tu(StructuralElement):
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    def _XmlElement(self) -> Element:
-        elem: Element = Element("tu", attrib=self._attrib)
+    def _make_xml_element(self) -> Element:
+        elem: Element = Element("tu", attrib=self._make_xml_attrib())
         for note in self.notes:
-            elem.append(note._XmlElement())
+            elem.append(note._make_xml_element())
         for prop in self.props:
-            elem.append(prop._XmlElement())
+            elem.append(prop._make_xml_element())
         for tuv in self.tuvs:
-            elem.append(tuv._XmlElement())
+            elem.append(tuv._make_xml_element())
         return elem
 
 
-class Tmx(StructuralElement):
+class Tmx(Element):
     __slots__ = ["header", "tus"]
 
     def __init__(self, header: Header, tus: Iterable[Tu]) -> None:
@@ -597,10 +582,9 @@ class Tmx(StructuralElement):
 
     def Dump(self, file: PathLike) -> None:
         tmx: Element = Element("tmx", attrib={"version": "1.4"})
-        tmx.append(self.header._XmlElement())
+        tmx.append(self.header._make_xml_element())
         body: Element = SubElement(tmx, "body")
         for tu in self.tus:
-            body.append(tu._XmlElement())
+            body.append(tu._make_xml_element())
         tree = ElementTree(tmx)
-        indent(tree, "    ")
         tree.write(file, encoding="utf-8", xml_declaration=True)
