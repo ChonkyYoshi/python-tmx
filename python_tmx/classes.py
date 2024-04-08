@@ -7,23 +7,19 @@ from xml.etree.ElementTree import Element, ElementTree, SubElement
 @runtime_checkable
 class TmxElement(Protocol):
 
-    def _make_xml_attrib(self) -> dict[str, str]:
+    def make_xml_attrib(self) -> dict[str, str]:
         """
-        Private method.
-
-        Creates the attribute dict for the _make_xml_element method.
+        Creates the attribute dict for the make_xml_element method.
         Keys have the name adjusted as needed to be tmx compliant
         (e.g. encoding -> o-encoding)
         """
         raise NotImplementedError
 
-    def _make_xml_element(self, force:bool) -> Element:
+    def make_xml_element(self, force:bool) -> Element:
         """
-        Private method.
-
         Convert an Element into a XML Element Tree Element.
         Object's content becomes the Element's text.
-        Attributes are from the _make_xml_attrib method.
+        Attributes are from the make_xml_attrib method.
 
         Note: Setting 'force' to True will call str(self.content)
         if the content is not a string object to avoid serializing errors.
@@ -35,12 +31,10 @@ class Note(TmxElement):
     """
     Class used to represent a <note> tag
 
-    Attributes
-    --------
-    Required:
+    Required attributes:
         content: str
             The actual content of the note
-    Optional:
+    Optional attributes:
         lang: str
             The language of the note's content
         encoding : str
@@ -56,19 +50,18 @@ class Note(TmxElement):
         self.lang = lang
         self.encoding = encoding
 
-    def _make_xml_attrib(self) -> dict[str, str]:
+    def make_xml_attrib(self) -> dict[str, str]:
         attrs: dict[str, str] = {
             "{http://www.w3.org/XML/1998/namespace}lang": self.lang,
             "o-encoding": self.encoding,
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    def _make_xml_element(self) -> Element:
-        elem = Element("note", attrib=self._make_xml_attrib())
-        if not isinstance(self.content, str):
+    def make_xml_element(self, force:bool = False) -> Element:
+        elem = Element("note", attrib=self.make_xml_attrib())
+        elem.text = self.content
+        if force:
             elem.text = str(self.content)
-        else:
-            elem.text = self.content
         return elem
 
 
@@ -76,14 +69,12 @@ class Prop(TmxElement):
     """
     Class used to represent a <prop> tag
 
-    Attributes
-    --------
-    Required:
+    Required attributes:
         content: str
             The actual content of the prop.
         _type: str
             The type of the prop. Usually in the form of "x-foo"
-    Optional:
+    Optional attributes:
         lang: str
             The language of the prop's content
         encoding: str
@@ -104,7 +95,7 @@ class Prop(TmxElement):
         self.lang = lang
         self.encoding = encoding
 
-    def _make_xml_attrib(self) -> dict[str, str]:
+    def make_xml_attrib(self) -> dict[str, str]:
         attrs: dict = {
             "{http://www.w3.org/XML/1998/namespace}lang": self.lang,
             "type": self._type,
@@ -112,23 +103,22 @@ class Prop(TmxElement):
         }
         return {key: value for key, value in attrs.items() if value is not None}
 
-    def _make_xml_element(self) -> Element:
-        elem: Element = Element("prop", attrib=self._make_xml_attrib())
-        if not isinstance(self.content, str):
+    def make_xml_element(self, force:bool = False) -> Element:
+        elem: Element = Element("prop", attrib=self.make_xml_attrib())
+        elem.text = self.content
+        if force:
             elem.text = str(self.content)
-        else:
-            elem.text = self.content
         return elem
 
 class Header(Element):
     """
-    The `<header>` object
+    Class used to represent a <header> tag
 
-    Contains general info regarding a tmx file. For many attributes,
-    if not defined at the tu/tuv level, the attributes from the header
-    will be used as the default.
+    Contains general info regarding the tmx file.
+    If an attribute isn't set a tu/tuv level, a CAT tool will generally
+    use the value from the header if it is exists there.
 
-    Attributes:
+    Required attributes:
         creationtool:
             A string that represents the tool used to create the tmx file
         creationtoolversion:
@@ -150,6 +140,8 @@ class Header(Element):
         srclang:
             Default source language for a tu unless specified otherwise.
             can be set "*all*" if there is no source language.
+        datatype:
+            
     """
 
     __slots__ = [
@@ -230,7 +222,7 @@ class Header(Element):
     def _make_xml_element(self) -> Element:
         elem: Element = Element("header", attrib=self._make_xml_attrib())
         for note in self.notes:
-            elem.append(note._make_xml_element())
+            elem.append(note.make_xml_element())
         for prop in self.props:
             elem.append(prop._make_xml_element())
         return elem
@@ -447,7 +439,7 @@ class Tuv(Element):
     def _make_xml_element(self) -> Element:
         elem: Element = Element("tuv", attrib=self._make_xml_attrib())
         for note in self.notes:
-            elem.append(note._make_xml_element())
+            elem.append(note.make_xml_element())
         for prop in self.props:
             elem.append(prop._make_xml_element())
         seg: Element = SubElement(elem, "seg")
@@ -565,7 +557,7 @@ class Tu(Element):
     def _make_xml_element(self) -> Element:
         elem: Element = Element("tu", attrib=self._make_xml_attrib())
         for note in self.notes:
-            elem.append(note._make_xml_element())
+            elem.append(note.make_xml_element())
         for prop in self.props:
             elem.append(prop._make_xml_element())
         for tuv in self.tuvs:
