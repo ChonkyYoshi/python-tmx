@@ -102,7 +102,7 @@ class seg:
 class note:
     def __init__(
         self,
-        content: str | Iterable[str | InlineElement],
+        content: str,
         lang: str | None = None,
         o_encoding: str | None = None,
     ) -> None:
@@ -114,7 +114,7 @@ class note:
 class prop:
     def __init__(
         self,
-        content: str | Iterable[str | InlineElement],
+        content: str,
         type_: str,
         lang: str | None = None,
         o_encoding: str | None = None,
@@ -228,8 +228,6 @@ class tu:
 
 
 class header:
-    "o_encoding, creationdate, creationid, changedate, changeid."
-
     def __init__(
         self,
         creationtool: str,
