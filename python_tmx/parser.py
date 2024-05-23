@@ -1,6 +1,6 @@
-from . import *
-from os import PathLike
-from xml.etree.ElementTree import Element, ElementTree, XMLParser, parse
+from typing import Iterator
+from classes import hi, it, note, ph, prop, map, sub, ude, tuv, tu, header
+from xml.etree.ElementTree import Element, fromstring
 
 
 def load_note(note_elem: Element) -> note:
@@ -57,13 +57,8 @@ def load_header(header_elem: Element) -> header:
     )
 
 
-def load_seg(seg_elem: Element) -> seg:
-    return seg("")
-
-
 def load_tuv(tuv_elem: Element) -> tuv:
     return tuv(
-        segment=seg(load_seg(tuv_elem.find("seg"))),
         lang=tuv_elem.get("lang"),
         o_encoding=tuv_elem.get("o-encoding"),
         datatype=tuv_elem.get("datatype"),
@@ -103,12 +98,97 @@ def load_tu(tu_elem: Element) -> tu:
     )
 
 
-def load_tmx(file: PathLike, encoding: str | None = None) -> tmx:
-    tree: ElementTree = parse(
-        file,
-        XMLParser(encoding=encoding),
+def load_ph(ph_elem: Element) -> tuple[ph, str | None]:
+    ph_obj = ph(
+        content=ph_elem.text,
+        x=ph_elem.get("x"),
+        type_=ph_elem.get("type"),
+        assoc=ph_elem.get("assoc"),
     )
-    _header: header = load_header(
-        header_elem=tree.find("header"),
+    if len(ph_elem) == 0:
+        return ph_obj, ph_elem.tail
+    else:
+        ph_obj.content = [ph_obj.content]
+        for elem in ph_elem.iter():
+            if elem.tag == 'sub':
+                ph_obj.content.extend(load_sub(elem))
+            else:
+                raise NotImplementedError("Non Sub tag in ph content")
+        return ph_obj, ph_elem.tail
+
+def load_it(it_elem: Element) -> tuple[it, str | None]:
+    it_obj = it(
+        content=it_elem.text,
+        pos=it_elem.get("pos"),
+        x=it_elem.get("x"),
+        type_=it_elem.get("type"),
     )
-    return tmx(header_=_header, tus=[tu(tuvs=[tuv(seg(""), lang="en-us")])])
+    if len(it_elem) == 0:
+        return it_obj, it_elem.tail
+    else:
+        it_obj.content = [it_obj.content]
+        for elem in it_elem.iter():
+            if elem.tag == 'sub':
+                it_obj.content.extend(load_sub(elem))
+            else:
+                raise NotImplementedError("Non Sub tag in it content")
+        return it_obj, it_obj.tail
+
+def load_hi(hi_elem: Element) -> tuple[hi, str | None]:
+    hi_obj = hi(
+        content=hi_elem.text,
+        x=hi_elem.get("x"),
+        type_=hi_elem.get("type"),
+    )
+    if len(hi_elem) == 0:
+        return hi_obj, hi_elem.tail
+    else:
+        hi_obj.content = [hi_obj.content]
+        for elem in hi_elem.iter():
+            for elem in hi_elem.iter():
+                match elem.tag:
+                    case 'ph':
+                        hi_obj.content.extend(load_ph(elem))
+                    case 'it':
+                        hi_obj.content.extend(load_it(elem))
+                    case 'hi':
+                        hi_obj.content.extend(load_hi(elem))
+        return hi_obj, hi_obj.tail
+
+
+def load_sub(sub_elem: Element) -> tuple[sub, str | None]:
+    sub_obj:sub = sub(
+            content=sub_elem.text,
+            datatype=sub_elem.get("datatype"),
+            type_=sub_elem.get("type"),
+        )
+    if len(sub_elem) == 0:
+        return sub_obj, sub_elem.tail
+    else:
+        sub_obj.content = [sub_obj.content]
+        for elem in sub_elem.iter():
+            match elem.tag:
+                case 'ph':
+                    sub_obj.content.extend(load_ph(elem))
+                case 'it':
+                    sub_obj.content.extend(load_it(elem))
+
+
+
+
+def iterchildren(root_element:Element) -> Iterator[Element]:
+    children:list[Element] = root_element.findall("*")
+    for child in children:
+        yield child
+
+def iterdescendants(root_element:Element) -> Iterator[Element]:
+    children:list[Element] = root_element.findall("*")
+    for child in children:
+        yield child
+        if len(child) != 0:
+            for grandchild in iterdescendants(child):
+                yield grandchild
+
+a = fromstring("""<root><child1><subchild1><subsubchild1></subsubchild1></subchild1></child1><child2></child2></root>""")
+for child in iterdescendants(a):
+    print(child.tag)

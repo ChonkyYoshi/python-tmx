@@ -2,13 +2,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Iterable, Literal
 
-type InlineElement = ph | bpt | ept | it | hi | sub | ut
-
-
 class ph:
     def __init__(
         self,
-        content: str | Iterable[str | InlineElement],
+        content: str | Iterable[str | sub],
         x: int | None = None,
         type_: str | None = None,
         assoc: Literal["p", "f", "b"] | None = None,
@@ -22,7 +19,7 @@ class ph:
 class bpt:
     def __init__(
         self,
-        content: str | Iterable[str | InlineElement],
+        content: str | Iterable[str | sub],
         i: int,
         x: int | None = None,
         type_: str | None = None,
@@ -36,7 +33,7 @@ class bpt:
 class ept:
     def __init__(
         self,
-        content: str | Iterable[str | InlineElement],
+        content: str | Iterable[str | sub],
         i: int,
     ) -> None:
         self.content = content
@@ -46,7 +43,7 @@ class ept:
 class it:
     def __init__(
         self,
-        content: str | Iterable[str | InlineElement],
+        content: str | Iterable[str | sub],
         pos: Literal["begin", "end"],
         x: int | None = None,
         type_: str | None = None,
@@ -60,7 +57,7 @@ class it:
 class hi:
     def __init__(
         self,
-        content: str | Iterable[str | InlineElement],
+        content: str | Iterable[str | ph | bpt | ept | it | hi],
         x: int | None = None,
         type_: str | None = None,
     ) -> None:
@@ -72,7 +69,7 @@ class hi:
 class sub:
     def __init__(
         self,
-        content: str | Iterable[str | InlineElement],
+        content: str | Iterable[str | ph | bpt | ept | it | hi],
         datatype: str | None = None,
         type_: str | None = None,
     ) -> None:
@@ -84,7 +81,7 @@ class sub:
 class ut:
     def __init__(
         self,
-        content: str | Iterable[str | InlineElement],
+        content: str | Iterable[str | sub],
         x: int | None = None,
     ) -> None:
         self.content = content
@@ -94,7 +91,7 @@ class ut:
 class seg:
     def __init__(
         self,
-        content: str | Iterable[str | InlineElement],
+        content: str | Iterable[str | ph | bpt | ept | it | hi],
     ) -> None:
         self.content = content
 
