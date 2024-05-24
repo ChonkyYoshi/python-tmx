@@ -83,19 +83,15 @@ class sub:
 class ut:
     def __init__(
         self,
-        content: str | Iterable[str | sub],
+        xml_element: Element | None = None,
+        content: str | Iterable[str | sub] | None = None,
         x: int | None = None,
     ) -> None:
-        self.content = content
-        self.x = x
-
-
-class seg:
-    def __init__(
-        self,
-        content: str | Iterable[str | ph | bpt | ept | it | hi],
-    ) -> None:
-        self.content = content
+        self.xml_element = xml_element
+        self.x = x if x is not None else self.xml_element.get("x")
+        self.content = content if content is not None else (
+            []
+        )
 
 
 class note:
@@ -167,129 +163,17 @@ class ude:
         base: str | None = None,
     ) -> None:
         self.xml_element = xml_element
-        if len(self.xml_element) == 0:
-            self.maps = maps
-        else:
-            self.maps = [map(map_) for map_ in self.xml_element.iterfind("map")]
+        self.maps = (
+            maps
+            if maps is not None
+            else (
+                [map(map_) for map_ in self.xml_element if map_.tag == "map"]
+                if self.xml_element is not None
+                else None
+            )
+        )
         self.name = name if name is not None else self.xml_element.get("name")
         self.base = base if base is not None else self.xml_element.get("base")
-
-
-class tuv:
-    def __init__(
-        self,
-        segment: seg,
-        lang: str,
-        o_encoding: str | None = None,
-        datatype: str | None = None,
-        usagecount: int | None = None,
-        lastusagedate: datetime | str | None = None,
-        creationtool: str | None = None,
-        creationtoolversion: str | None = None,
-        creationdate: datetime | str | None = None,
-        creationid: str | None = None,
-        changedate: datetime | str | None = None,
-        changeid: str | None = None,
-        o_tmf: str | None = None,
-        notes: Iterable[note] | None = None,
-        props: Iterable[prop] | None = None,
-    ) -> None:
-        self.segment = segment
-        self.lang = lang
-        self.o_encoding = o_encoding
-        self.datatype = datatype
-        self.usagecount = usagecount
-        self.lastusagedate = lastusagedate
-        self.creationtool = creationtool
-        self.creationtoolversion = creationtoolversion
-        self.creationdate = creationdate
-        self.creationid = creationid
-        self.changedate = changedate
-        self.changeid = changeid
-        self.o_tmf = o_tmf
-        self.notes = notes
-        self.props = props
-
-
-class tu:
-    def __init__(
-        self,
-        xml_element: Element | None = None,
-        tuvs: Iterable[tuv] | None = None,
-        tuid: int | str | None = None,
-        o_encoding: str | None = None,
-        datatype: str | None = None,
-        usagecount: int | str | None = None,
-        lastusagedate: datetime | str | None = None,
-        creationtool: str | None = None,
-        creationtoolversion: str | None = None,
-        creationdate: datetime | str | None = None,
-        creationid: str | None = None,
-        changedate: datetime | str | None = None,
-        segtype: Literal["block", "paragraph", "sentence", "phrase"] | None = None,
-        changeid: str | None = None,
-        o_tmf: str | None = None,
-        srclang: str | None = None,
-        notes: Iterable[note] | None = None,
-        props: Iterable[prop] | None = None,
-    ) -> None:
-        self.xml_element = xml_element
-        self.tuid = tuid if tuid is not None else self.xml_element.get("tuid")
-        self.o_encoding = (
-            o_encoding if o_encoding is not None else self.xml_element.get("o_encoding")
-        )
-        self.datatype = (
-            datatype if datatype is not None else self.xml_element.get("datatype")
-        )
-        self.usagecount = (
-            usagecount if usagecount is not None else self.xml_element.get("usagecount")
-        )
-        self.lastusagedate = (
-            lastusagedate
-            if lastusagedate is not None
-            else self.xml_element.get("lastusagedate")
-        )
-        self.creationtool = (
-            creationtool
-            if creationtool is not None
-            else self.xml_element.get("creationtool")
-        )
-        self.creationtoolversion = (
-            creationtoolversion
-            if creationtoolversion is not None
-            else self.xml_element.get("creationtoolversion")
-        )
-        self.creationdate = (
-            creationdate
-            if creationdate is not None
-            else self.xml_element.get("creationdate")
-        )
-        self.creationid = (
-            creationid if creationid is not None else self.xml_element.get("creationid")
-        )
-        self.changedate = (
-            changedate if changedate is not None else self.xml_element.get("changedate")
-        )
-        self.segtype = (
-            segtype if segtype is not None else self.xml_element.get("segtype")
-        )
-        self.changeid = (
-            changeid if changeid is not None else self.xml_element.get("changeid")
-        )
-        self.o_tmf = o_tmf if o_tmf is not None else self.xml_element.get("o_tmf")
-        self.srclang = (
-            srclang if srclang is not None else self.xml_element.get("srclang")
-        )
-        if len(self.xml_element) == 0:
-            self.notes = notes
-            self.props = props
-        else:
-            self.notes = [
-                note(note_) for note_ in self.xml_element if note_.tag == "note"
-            ]
-            self.props = [
-                prop(prop_) for prop_ in self.xml_element if prop_.tag == "prop"
-            ]
 
 
 class header:
@@ -353,21 +237,30 @@ class header:
         self.changeid = (
             changeid if changeid is not None else self.xml_element.get("changeid")
         )
-        if len(self.xml_element) == 0:
-            self.notes = notes
-            self.props = props
-            self.udes = udes
-        else:
-            self.notes = [
-                note(note_) for note_ in self.xml_element if note_.tag == "note"
-            ]
-            self.props = [
-                prop(prop_) for prop_ in self.xml_element if prop_.tag == "prop"
-            ]
-            self.udes = [ude(ude_) for ude_ in self.xml_element if ude_.tag == "ude"]
-
-
-class tmx:
-    def __init__(self, header_: header, tus: Iterable[tu]) -> None:
-        self.header_ = header_
-        self.tus = tus
+        self.notes = (
+            notes
+            if notes is not None
+            else (
+                [note(note_) for note_ in self.xml_element if note_.tag == "note"]
+                if self.xml_element is not None
+                else None
+            )
+        )
+        self.props = (
+            props
+            if props is not None
+            else (
+                [prop(prop_) for prop_ in self.xml_element if prop_.tag == "prop"]
+                if self.xml_element is not None
+                else None
+            )
+        )
+        self.udes = (
+            udes
+            if udes is not None
+            else (
+                [ude(ude_) for ude_ in self.xml_element if ude_.tag == "ude"]
+                if self.xml_element is not None
+                else None
+            )
+        )
