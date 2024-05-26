@@ -4,80 +4,21 @@ from typing import Iterable, Literal
 from xml.etree.ElementTree import Element
 
 
-class ph:
-    def __init__(
-        self,
-        content: str | Iterable[str | sub],
-        x: int | None = None,
-        type_: str | None = None,
-        assoc: Literal["p", "f", "b"] | None = None,
-    ) -> None:
-        self.content = content
-        self.x = x
-        self.type_ = type_
-        self.assoc = assoc
-
-
-class bpt:
-    def __init__(
-        self,
-        content: str | Iterable[str | sub],
-        i: int,
-        x: int | None = None,
-        type_: str | None = None,
-    ) -> None:
-        self.content = content
-        self.i = i
-        self.x = x
-        self.type_ = type_
-
-
-class ept:
-    def __init__(
-        self,
-        content: str | Iterable[str | sub],
-        i: int,
-    ) -> None:
-        self.content = content
-        self.i = i
-
-
-class it:
-    def __init__(
-        self,
-        content: str | Iterable[str | sub],
-        pos: Literal["begin", "end"],
-        x: int | None = None,
-        type_: str | None = None,
-    ) -> None:
-        self.content = content
-        self.pos = pos
-        self.x = x
-        self.type_ = type_
-
-
-class hi:
-    def __init__(
-        self,
-        content: str | Iterable[str | ph | bpt | ept | it | hi],
-        x: int | None = None,
-        type_: str | None = None,
-    ) -> None:
-        self.content = content
-        self.x = x
-        self.type_ = type_
-
 
 class sub:
     def __init__(
         self,
-        content: str | Iterable[str | ph | bpt | ept | it | hi],
+        xml_element: Element | None = None,
+        content: str | Iterable[str] | None = None,
         datatype: str | None = None,
         type_: str | None = None,
     ) -> None:
-        self.content = content
-        self.datatype = datatype
-        self.type_ = type_
+        self.xml_element = xml_element
+        self.datatype = (
+            datatype if datatype is not None else self.xml_element.get("datatype")
+        )
+        self.type_ = type_ if type_ is not None else self.xml_element.get("type")
+        self.content = content if content is not None else self.xml_element.text
 
 
 class ut:
@@ -89,8 +30,19 @@ class ut:
     ) -> None:
         self.xml_element = xml_element
         self.x = x if x is not None else self.xml_element.get("x")
-        self.content = content if content is not None else (
-            []
+
+
+class seg:
+    def __init__(
+        self,
+        xml_element: Element | None = None,
+        content: str | Iterable[str | ut | sub] | None = None,
+    ) -> None:
+        self.xml_element = xml_element
+        self.content = (
+            content
+            if content is not None
+            else (self.xml_element.text if len(self.xml_element) == 0 else [].extend([]))
         )
 
 
@@ -98,12 +50,12 @@ class note:
     def __init__(
         self,
         xml_element: Element | None = None,
-        content: str | None = None,
+        text: str | None = None,
         lang: str | None = None,
         o_encoding: str | None = None,
     ) -> None:
         self.xml_element = xml_element
-        self.content = content if content is not None else self.xml_element.text
+        self.text = text if text is not None else self.xml_element.text
         self.lang = (
             lang
             if lang is not None
@@ -118,13 +70,13 @@ class prop:
     def __init__(
         self,
         xml_element: Element | None = None,
-        content: str | None = None,
+        text: str | None = None,
         type_: str | None = None,
         lang: str | None = None,
         o_encoding: str | None = None,
     ) -> None:
         self.xml_element = xml_element
-        self.content = content if content is not None else self.xml_element.text
+        self.text = text if text is not None else self.xml_element.text
         self.type_ = type_ if type_ is not None else self.xml_element.get("type")
         self.lang = (
             lang
