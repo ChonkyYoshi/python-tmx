@@ -1,10 +1,10 @@
-class TagError(Exception):
-    """Base class for all tag errors encountered during parsing a tmx file"""
+class MissingAttributeError(Exception):
+    """Raised when trying to serialize an object with missing required attributes"""
 
 
-class InccorectTagError(TagError):
+class InccorectTagError(Exception):
     """Raised when an incorrect tag is encountered when building an object"""
 
 
-class NonEmptyTagError(TagError):
+class NonEmptyTagError(Exception):
     """Raised if a tag that's supposed to be empty has text or children"""

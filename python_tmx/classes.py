@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Iterable, Literal
 from xml.etree.ElementTree import Element
 
-from .errors import InccorectTagError, NonEmptyTagError
+from errors import InccorectTagError, MissingAttributeError, NonEmptyTagError
 
 
 class TmxTag(ABC):
@@ -349,7 +349,7 @@ class Header(TmxTag):
                 self.segtype = (
                     segtype if segtype is not None else xml_element.get("segtype")
                 )
-                self.o_tmf = o_tmf if o_tmf is not None else xml_element.get("o_tmf")
+                self.o_tmf = o_tmf if o_tmf is not None else xml_element.get("o-tmf")
                 self.adminlang = (
                     adminlang if adminlang is not None else xml_element.get("adminlang")
                 )
@@ -425,30 +425,44 @@ class Header(TmxTag):
 
     def export(self) -> Element:
         final = Element("header")
-        if self.creationtool:
-            final.set("creationtool", self.creationtool)
-        if self.creationtoolversion:
-            final.set("creationtoolversion", self.creationtoolversion)
-        if self.segtype:
-            final.set("segtype", self.segtype)
-        if self.o_tmf:
-            final.set("o-tmf", self.o_tmf)
-        if self.adminlang:
-            final.set("adminlang", self.adminlang)
-        if self.srclang:
-            final.set("srclang", self.srclang)
-        if self.datatype:
-            final.set("datatype", self.datatype)
-        if self.o_encoding:
-            final.set("o-encoding", self.o_encoding)
-        if self.creationdate:
-            final.set("creationdate", self.creationdate)
-        if self.creationid:
-            final.set("creationid", self.creationid)
-        if self.changedate:
-            final.set("changedate", self.changedate)
-        if self.changeid:
-            final.set("changeid", self.changeid)
+        for attr, val in vars(self):
+            match attr:
+                case (
+                    "creationtool"
+                    | "creationtoolversion"
+                    | "adminlang"
+                    | "srclang"
+                    | "datatype"
+                ):
+                    if val is None:
+                        raise MissingAttributeError(
+                            f"required attribute `{attr}` is missing from header"
+                        )
+                    final.set(attr, val)
+                case "segtype":
+                    if val not in ["block", "paragraph", "sentence", "phrase"]:
+                        raise AttributeError(
+                            f"`segtype` must be one of block, paragraph, sentence or phrase not {val}"
+                        )
+                    final.set(attr, val)
+                case "o_tmf":
+                    if val is None:
+                        raise MissingAttributeError(
+                            f"required attribute `{attr}` is missing from header"
+                        )
+                    final.set("o-tmf", val)
+                case "o_encoding":
+                    if attr == "o_encoding":
+                        final.set("o-encoding", val)
+                case "creationdate" | "changedate":
+                    if isinstance(val, datetime):
+                        try:
+                            final.set(attr, val.strftime(r"%Y%m%dT%H%M%SZ"))
+                        except:
+                            pass
+                case "creationid" | "changeid":
+                    final.set(attr, val)
+
         if self.notes is not None:
             for note in self.notes:
                 final.append(note.export())
