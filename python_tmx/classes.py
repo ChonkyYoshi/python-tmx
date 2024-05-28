@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+from abc import ABC
 from datetime import datetime
 from typing import Iterable, Literal
-from xml.etree.ElementTree import Element, parse, tostring
+from xml.etree.ElementTree import Element
 
-from errors import InccorectTagError
+from .errors import InccorectTagError, NonEmptyTagError
 
 
-class Sub:
+class TmxTag(ABC):
+    def export(self) -> Element:
+        raise NotImplementedError
+
+
+class Sub(TmxTag):
     def __init__(
         self,
         xml_element: Element | None = Element("sub"),
@@ -19,8 +25,7 @@ class Sub:
             case Element():
                 if xml_element.tag != "sub":
                     raise InccorectTagError(
-                        f"Element is not a <sub> but <{xml_element.tag}>.",
-                        element=xml_element,
+                        f"Expected <sub> but found <{xml_element.tag}>"
                     )
                 elif len(xml_element) == 0:
                     self.content = content if content is not None else xml_element.text
@@ -29,10 +34,15 @@ class Sub:
                         [xml_element.text] if xml_element.text is not None else []
                     )
                     for child in xml_element:
-                        if child.tag not in ["bpt", "ept", "it", "ph", "hi", "sub"]:
+                        if child.tag not in [
+                            "bpt",
+                            "ept",
+                            "it",
+                            "ph",
+                            "hi",
+                        ]:
                             raise InccorectTagError(
-                                f"Encountered a <{child.tag}> element inside a <sub> element. <ut> elements can only contain <sub> elements.",
-                                element=child,
+                                f"Expected one of <bpt>, <ept>, <it>, <ph>, <hi> but found <{child.tag}>"
                             )
                         self.content.append(Sub(xml_element=child))
                         self.content.append(child.tail)
@@ -46,7 +56,7 @@ class Sub:
                 self.type_ = type_
             case _:
                 raise TypeError(
-                    f"xml_Element can only be of type Element or None not {type(xml_element)}"
+                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
                 )
 
     def export(self) -> Element:
@@ -72,7 +82,7 @@ class Sub:
         return final
 
 
-class Ut:
+class Ut(TmxTag):
     def __init__(
         self,
         xml_element: Element | None = None,
@@ -80,7 +90,7 @@ class Ut:
         x: int | str | None = None,
     ) -> None:
         """
-        The Ut class constructor. Can be created from parsing a <ut> xml Element.
+        The Ut class constructor(TmxTag). Can be created from parsing a <ut> xml Element.
         if `content` and/or `x` are passed to the constructor, their value will override
         the values parsed from `xml_element`
 
@@ -102,8 +112,7 @@ class Ut:
             case Element():
                 if xml_element.tag != "ut":
                     raise InccorectTagError(
-                        f"Element is not a <ut> but <{xml_element.tag}>.",
-                        element=xml_element,
+                        f"Expected <ut> but found <{xml_element.tag}>"
                     )
                 elif len(xml_element) == 0:
                     self.content = xml_element.text if content is None else content
@@ -114,8 +123,7 @@ class Ut:
                     for child in xml_element:
                         if child.tag != "sub":
                             raise InccorectTagError(
-                                f"Encountered a <{child.tag}> element inside a <ut> element. <ut> elements can only contain <sub> elements.",
-                                element=child,
+                                f"Expected <sub> but found <{child.tag}>"
                             )
                         self.content.append(Sub(xml_element=child))
                         self.content.append(child.tail)
@@ -125,7 +133,7 @@ class Ut:
                 self.x = x
             case _:
                 raise TypeError(
-                    f"xml_Element can only be of type Element or None not {type(xml_element)}"
+                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
                 )
 
     def export(self) -> Element:
@@ -149,7 +157,7 @@ class Ut:
         return final
 
 
-class Note:
+class Note(TmxTag):
     def __init__(
         self,
         xml_element: Element | None,
@@ -177,7 +185,7 @@ class Note:
         return final
 
 
-class Prop:
+class Prop(TmxTag):
     def __init__(
         self,
         xml_element: Element | None = None,
@@ -209,7 +217,7 @@ class Prop:
         return final
 
 
-class Map:
+class Map(TmxTag):
     def __init__(
         self,
         xml_element: Element | None,
@@ -218,10 +226,31 @@ class Map:
         ent: str | None = None,
         subst: str | None = None,
     ) -> None:
-        self.unicode = unicode if unicode is not None else xml_element.get("unicode")
-        self.code = code if code is not None else xml_element.get("code")
-        self.ent = ent if ent is not None else xml_element.get("ent")
-        self.subst = subst if subst is not None else xml_element.get("subst")
+        match xml_element:
+            case Element():
+                if xml_element.tag != "map":
+                    raise InccorectTagError(
+                        f"expected <map> but found <{xml_element.tag}>"
+                    )
+                if xml_element.text is not None:
+                    raise NonEmptyTagError(
+                        f"<map> tags are not allowed to have text but element has the following:\n{xml_element.text}"
+                    )
+                if len(xml_element) != 0:
+                    raise NonEmptyTagError(
+                        f"<map> tags are not allowed to have children but found {len(xml_element)}"
+                    )
+                self.unicode = (
+                    unicode if unicode is not None else xml_element.get("unicode")
+                )
+                self.code = code if code is not None else xml_element.get("code")
+                self.ent = ent if ent is not None else xml_element.get("ent")
+                self.subst = subst if subst is not None else xml_element.get("subst")
+            case None:
+                self.unicode = unicode
+                self.code = code
+                self.ent = ent
+                self.subst = subst
 
     def export(self) -> Element:
         final = Element("map")
@@ -236,7 +265,7 @@ class Map:
         return final
 
 
-class Ude:
+class Ude(TmxTag):
     def __init__(
         self,
         xml_element: Element | None = None,
@@ -244,17 +273,27 @@ class Ude:
         name: str | None = None,
         base: str | None = None,
     ) -> None:
-        self.maps = (
-            maps
-            if maps is not None
-            else (
-                [Map(map) for map in xml_element if map.tag == "map"]
-                if xml_element is not None
-                else None
-            )
-        )
-        self.name = name if name is not None else xml_element.get("name")
-        self.base = base if base is not None else xml_element.get("base")
+        match xml_element:
+            case Element():
+                if xml_element.tag != "ude":
+                    raise InccorectTagError(
+                        f"Expected <ude> but found <{xml_element.tag}>"
+                    )
+                if xml_element.text is not None:
+                    raise NonEmptyTagError(
+                        f"<ude> tags are not allowed to have text but element has the following:\n{xml_element.text}"
+                    )
+                self.name = name if name is not None else xml_element.get("name")
+                self.base = base if base is not None else xml_element.get("base")
+
+            case None:
+                self.maps = maps
+                self.name = name
+                self.base = base
+            case _:
+                raise TypeError(
+                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
+                )
 
     def export(self) -> Element:
         final = Element("ude")
@@ -267,10 +306,10 @@ class Ude:
         return final
 
 
-class Header:
+class Header(TmxTag):
     def __init__(
         self,
-        xml_element: Element | None | None = Element("header"),
+        xml_element: Element | None = None,
         creationtool: str | None = None,
         creationtoolversion: str | None = None,
         segtype: Literal["block", "paragraph", "sentence", "phrase"] | None = None,
@@ -287,69 +326,102 @@ class Header:
         props: Iterable[Prop] | None = None,
         udes: Iterable[Ude] | None = None,
     ) -> None:
-        self.creationtool = (
-            creationtool
-            if creationtool is not None
-            else xml_element.get("creationtool")
-        )
-        self.creationtoolversion = (
-            creationtoolversion
-            if creationtoolversion is not None
-            else xml_element.get("creationtoolversion")
-        )
-        self.segtype = segtype if segtype is not None else xml_element.get("segtype")
-        self.o_tmf = o_tmf if o_tmf is not None else xml_element.get("o_tmf")
-        self.adminlang = (
-            adminlang if adminlang is not None else xml_element.get("adminlang")
-        )
-        self.srclang = srclang if srclang is not None else xml_element.get("srclang")
-        self.datatype = (
-            datatype if datatype is not None else xml_element.get("datatype")
-        )
-        self.o_encoding = (
-            o_encoding if o_encoding is not None else xml_element.get("o-encoding")
-        )
-        self.creationdate = (
-            creationdate
-            if creationdate is not None
-            else xml_element.get("creationdate")
-        )
-        self.creationid = (
-            creationid if creationid is not None else xml_element.get("creationid")
-        )
-        self.changedate = (
-            changedate if changedate is not None else xml_element.get("changedate")
-        )
-        self.changeid = (
-            changeid if changeid is not None else xml_element.get("changeid")
-        )
-        self.notes = (
-            notes
-            if notes is not None
-            else (
-                [Note(note) for note in xml_element if note.tag == "note"]
-                if xml_element is not None
-                else None
-            )
-        )
-        self.props = (
-            props
-            if props is not None
-            else (
-                [Prop(prop) for prop in xml_element if prop.tag == "prop"]
-                if xml_element is not None
-                else None
-            )
-        )
-        self.udes = (
-            udes
-            if udes is not None
-            else (
-                [Ude(ude) for ude in xml_element if ude.tag == "ude"]
-                if xml_element is not None
-                else None
-            )
-        )
+        match xml_element:
+            case Element():
+                if xml_element.tag != "header":
+                    raise InccorectTagError(
+                        f"Expected <header> but found <{xml_element.tag}>"
+                    )
+                if xml_element.text is not None:
+                    raise NonEmptyTagError(
+                        f"<header> tags are not allowed to have text but element has the following:\n{xml_element.text}"
+                    )
+                self.creationtool = (
+                    creationtool
+                    if creationtool is not None
+                    else xml_element.get("creationtool")
+                )
+                self.creationtoolversion = (
+                    creationtoolversion
+                    if creationtoolversion is not None
+                    else xml_element.get("creationtoolversion")
+                )
+                self.segtype = (
+                    segtype if segtype is not None else xml_element.get("segtype")
+                )
+                self.o_tmf = o_tmf if o_tmf is not None else xml_element.get("o_tmf")
+                self.adminlang = (
+                    adminlang if adminlang is not None else xml_element.get("adminlang")
+                )
+                self.srclang = (
+                    srclang if srclang is not None else xml_element.get("srclang")
+                )
+                self.datatype = (
+                    datatype if datatype is not None else xml_element.get("datatype")
+                )
+                self.o_encoding = (
+                    o_encoding
+                    if o_encoding is not None
+                    else xml_element.get("o-encoding")
+                )
+                self.creationdate = (
+                    creationdate
+                    if creationdate is not None
+                    else xml_element.get("creationdate")
+                )
+                self.creationid = (
+                    creationid
+                    if creationid is not None
+                    else xml_element.get("creationid")
+                )
+                self.changedate = (
+                    changedate
+                    if changedate is not None
+                    else xml_element.get("changedate")
+                )
+                self.changeid = (
+                    changeid if changeid is not None else xml_element.get("changeid")
+                )
+                if len(xml_element) == 0:
+                    self.notes = notes
+                    self.props = props
+                    self.udes = udes
+                else:
+                    self.notes = []
+                    self.props = []
+                    self.udes = []
+                    for child in xml_element:
+                        match child.tag:
+                            case "note" if notes is not None:
+                                self.notes.append(Note(xml_element=child))
+                            case "prop" if props is not None:
+                                self.props.append(Prop(xml_element=child))
+                            case "ude" if udes is not None:
+                                self.udes.append(Ude(xml_element=child))
+                            case _:
+                                raise InccorectTagError(
+                                    f"expected one of note, prop, ude but found {child.tag}"
+                                )
+            case None:
+                self.creationtool = creationtool
+                self.creationtoolversion = creationtoolversion
+                self.segtype = segtype
+                self.o_tmf = o_tmf
+                self.adminlang = adminlang
+                self.srclang = srclang
+                self.datatype = datatype
+                self.o_encoding = o_encoding
+                self.creationdate = creationdate
+                self.creationid = creationid
+                self.changedate = changedate
+                self.changeid = changeid
+                self.notes = notes
+                self.props = props
+                self.udes = udes
+            case _:
+                raise TypeError(
+                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
+                )
 
     def export(self) -> Element:
         final = Element("header")
@@ -377,14 +449,13 @@ class Header:
             final.set("changedate", self.changedate)
         if self.changeid:
             final.set("changeid", self.changeid)
-        for note in self.notes:
-            final.append(note.export())
-        for prop in self.props:
-            final.append(prop.export())
-        for ude in self.udes:
-            final.append(ude.export())
+        if self.notes is not None:
+            for note in self.notes:
+                final.append(note.export())
+        if self.props is not None:
+            for prop in self.props:
+                final.append(prop.export())
+        if self.udes is not None:
+            for ude in self.udes:
+                final.append(ude.export())
         return final
-
-
-a = Header(xml_element=parse("a.tmx").getroot())
-print(tostring(a.export()))

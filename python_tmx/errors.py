@@ -1,13 +1,10 @@
-from xml.etree.ElementTree import Element
+class TagError(Exception):
+    """Base class for all tag errors encountered during parsing a tmx file"""
 
 
-class TmxError(Exception):
-    """base class for all Custom Errors"""
+class InccorectTagError(TagError):
+    """Raised when an incorrect tag is encountered when building an object"""
 
 
-class InccorectTagError(TmxError):
-    """Error raised when an incorrect tag is encountered when building an object"""
-
-    def __init__(self, *args: object, element: Element) -> None:
-        super().__init__(*args)
-        self.element = element
+class NonEmptyTagError(TagError):
+    """Raised if a tag that's supposed to be empty has text or children"""
