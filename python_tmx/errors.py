@@ -1,4 +1,4 @@
-class MissingAttributeError(Exception):
+class MissingRequiredAttributeError(Exception):
     """Raised when trying to serialize an object with missing required attributes"""
 
 
