@@ -90,25 +90,6 @@ class Ut(TmxTag):
         content: str | Iterable[str | Sub] | None = None,
         x: int | str | None = None,
     ) -> None:
-        """
-        The Ut class constructor(TmxTag). Can be created from parsing a <ut> xml Element.
-        if `content` and/or `x` are passed to the constructor, their value will override
-        the values parsed from `xml_element`
-
-        Args:
-            xml_element (Element | None, optional):
-            An Element object to convert to a Ut object. Defaults to None.
-
-            content (str | Iterable[str  |  Sub] | None, optional):
-            The contents of the element. Defaults to None.
-
-            x (int | None, optional):
-            Used to match inline elements between <tuv> in the same tu. Defaults to None.
-
-        Raises:
-            TagError: if `xml_element` is not a <ut> or if any child element is not a <sub>
-            TypeError: if any of the arguments are of the wrong type
-        """
         match xml_element:
             case Element():
                 if xml_element.tag != "ut":
@@ -162,19 +143,39 @@ class Note(TmxTag):
     def __init__(
         self,
         xml_element: Element | None,
-        content: str | None = None,
+        text: str | None = None,
         lang: str | None = None,
         o_encoding: str | None = None,
     ) -> None:
-        self.text = content if content is not None else xml_element.text
-        self.lang = (
-            lang
-            if lang is not None
-            else xml_element.get("{http://www.w3.org/XML/1998/namespace}lang")
-        )
-        self.o_encoding = (
-            o_encoding if o_encoding is not None else xml_element.get("o-encoding")
-        )
+        match xml_element:
+            case Element():
+                if xml_element.tag != "note":
+                    raise InccorectTagError(
+                        f"expected <note> but found <{xml_element.tag}>"
+                    )
+                if len(xml_element) != 0:
+                    raise NonEmptyTagError(
+                        f"<note> tags are not allowed to have children but found {len(xml_element)}"
+                    )
+                self.text = text if text is not None else xml_element.text
+                self.lang = (
+                    lang
+                    if lang is not None
+                    else xml_element.get("{http://www.w3.org/XML/1998/namespace}lang")
+                )
+                self.o_encoding = (
+                    o_encoding
+                    if o_encoding is not None
+                    else xml_element.get("o-encoding")
+                )
+            case None:
+                self.text = text
+                self.lang = lang
+                self.o_encoding = o_encoding
+            case _:
+                raise TypeError(
+                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
+                )
 
     def export(self) -> Element:
         final = Element("note")
@@ -199,16 +200,33 @@ class Prop(TmxTag):
         lang: str | None = None,
         o_encoding: str | None = None,
     ) -> None:
-        self.text = content if content is not None else xml_element.text
-        self.type_ = type_ if type_ is not None else xml_element.get("type")
-        self.lang = (
-            lang
-            if lang is not None
-            else xml_element.get("{http://www.w3.org/XML/1998/namespace}lang")
-        )
-        self.o_encoding = (
-            o_encoding if o_encoding is not None else xml_element.get("o-encoding")
-        )
+        match xml_element:
+            case Element():
+                if xml_element.tag != "prop":
+                    raise InccorectTagError(
+                        f"expected <prop> but found <{xml_element.tag}>"
+                    )
+                self.content = content if content is not None else xml_element.text
+                self.lang = (
+                    lang
+                    if lang is not None
+                    else xml_element.get("{http://www.w3.org/XML/1998/namespace}lang")
+                )
+                self.type_ = type_ if type_ is not None else xml_element.get("type")
+                self.o_encoding = (
+                    o_encoding
+                    if o_encoding is not None
+                    else xml_element.get("o-encoding")
+                )
+            case None:
+                self.content = content
+                self.type_ = type_
+                self.lang = lang
+                self.o_encoding = o_encoding
+            case _:
+                raise TypeError(
+                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
+                )
 
     def export(self) -> Element:
         final = Element("prop")
@@ -264,11 +282,18 @@ class Map(TmxTag):
                 self.code = code
                 self.ent = ent
                 self.subst = subst
+            case _:
+                raise TypeError(
+                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
+                )
 
     def export(self) -> Element:
         final = Element("map")
-        if self.unicode is not None:
-            final.set("unicode", self.unicode)
+        if self.unicode is None:
+            raise MissingRequiredAttributeError(
+                "required attribute `unicode` is missing from map object"
+            )
+        final.set("unicode", self.unicode)
         if self.code is not None:
             final.set("code", self.code)
         if self.ent is not None:
@@ -464,7 +489,21 @@ class Header(TmxTag):
 
     def export(self) -> Element:
         final = Element("header")
-        for attr, val in vars(self).items():
+        for attr in [
+            "creationtool",
+            "creationtoolversion",
+            "segtype",
+            "o_tmf",
+            "adminlang",
+            "srclang",
+            "datatype",
+            "o_encoding",
+            "creationdate",
+            "creationid",
+            "changedate",
+            "changeid",
+        ]:
+            val = self.__getattribute__(attr)
             match attr:
                 case (
                     "creationtool"
@@ -472,43 +511,46 @@ class Header(TmxTag):
                     | "adminlang"
                     | "srclang"
                     | "datatype"
+                    | "segtype"
+                    | "o_tmf"
                 ):
                     if val is None:
-                        raise MissingRequiredAttributeError(
+                        raise AttributeError(
                             f"required attribute `{attr}` is missing from header object"
                         )
-                    final.set(attr, val)
-                case "segtype":
-                    if val.lower() not in ["block", "paragraph", "sentence", "phrase"]:
-                        raise MissingRequiredAttributeError(
+                    if not isinstance(val, str):
+                        raise TypeError(
+                            f"attribute `{attr}` must be of type string not {type(val)}"
+                        )
+                    if attr == "segtype" and val.lower() not in [
+                        "block",
+                        "paragraph",
+                        "sentence",
+                        "phrase",
+                    ]:
+                        raise AttributeError(
                             f"`segtype` must be one of block, paragraph, sentence or phrase not {val}"
                         )
+                    if attr == "o_tmf":
+                        final.set("o-tmf", val)
+                        continue
+                    if attr == "o_encoding":
+                        final.set("o-encoding", val)
+                        continue
                     final.set(attr, val)
-                case "o_tmf":
-                    if val is None:
-                        raise MissingRequiredAttributeError(
-                            f"required attribute `{attr}` is missing from header object"
-                        )
-                    final.set("o-tmf", val)
-                case "o_encoding" if val is not None:
-                    final.set("o-encoding", val)
                 case "creationdate" | "changedate" if val is not None:
                     if isinstance(val, datetime):
                         final.set(attr, val.strftime(r"%Y%m%dT%H%M%SZ"))
-                    else:
+                    elif isinstance(val, str):
+                        if not match(r"^\d{8}T\d{6}Z$", val):
+                            raise ValueError
                         final.set(attr, val)
                 case "creationid" | "changeid" if val is not None:
                     final.set(attr, val)
-                case "notes" if val is not None:
-                    final.extend([note.export() for note in self.notes])
-                case "props" if val is not None:
-                    final.extend([prop.export() for prop in self.props])
-                case "udes" if val is not None:
-                    final.extend([ude.export() for ude in self.udes])
-                case _:
-                    pass
-        tostring(final)
+            if self.notes is not None:
+                final.extend([note.export() for note in self.notes])
+            if self.props is not None:
+                final.extend([prop.export() for prop in self.props])
+            if self.udes is not None:
+                final.extend([ude.export() for ude in self.udes])
         return final
-
-
-# print(tostring(Header(xml_element=parse("a.tmx").getroot()).export()))
