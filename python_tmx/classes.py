@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from re import MULTILINE, match
 from typing import Any, Iterable, Literal
-from xml.etree.ElementTree import Element, parse, tostring
+from xml.etree.ElementTree import Element
 
 
 class IncorrectTagError(Exception):
@@ -333,5 +333,133 @@ class Map(TmxTag):
         return element
 
 
-a = Header(parse("a.tmx").getroot())
-print(tostring(a.export()))
+class Ut(TmxTag):
+    def __init__(
+        self,
+        xml_element: Element | None = None,
+        content: Iterable | str | None = None,
+        x: int | None = None,
+    ) -> None:
+        match xml_element:
+            case Element():
+                if xml_element.tag != "ut":
+                    raise IncorrectTagError(
+                        found_tag=xml_element.tag, expected_tag="ut"
+                    )
+                self.x = x if x is not None else xml_element.get("x")
+                if content is not None:
+                    self.content = content
+                elif len(xml_element) == 0:
+                    self.content = xml_element.text
+                else:
+                    self.content = []
+                    if xml_element.text is not None:
+                        self.content.append(xml_element.text)
+                    for sub in xml_element:
+                        if sub.tag != "sub":
+                            raise IncorrectTagError(
+                                expected_tag="sub", found_tag=sub.tag
+                            )
+                        self.content.append(Sub(sub))
+                        if sub.tail is not None:
+                            self.content.append(sub)
+            case None:
+                for attr, val in locals().items():
+                    if attr in ("self", "xml_element"):
+                        continue
+                    self.__setattr__(attr, val)
+            case _:
+                raise TypeError(
+                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
+                )
+
+    def export(self) -> Element:
+        element: Element = Element("ut")
+        if self.x is not None:
+            element.set("x", self.x)
+        if isinstance(self.content, str):
+            element.text = self.content
+            return element
+        for index, elem in enumerate(self.content):
+            match (index, elem):
+                case (0, str()):
+                    element.text = elem
+                case (_, Sub()):
+                    element.append(elem.export())
+                case (_, str()):
+                    if element.text is not None:
+                        element.text += elem
+                    elif element.tail is None:
+                        element.tail = elem
+                    else:
+                        element.tail += elem
+        return element
+
+
+class Sub(TmxTag):
+    def __init__(
+        self,
+        xml_element: Element | None = None,
+        content: Iterable | str | None = None,
+        datatype: int | None = None,
+        type_: int | None = None,
+    ) -> None:
+        match xml_element:
+            case Element():
+                if xml_element.tag != "sub":
+                    raise IncorrectTagError(
+                        found_tag=xml_element.tag, expected_tag="ut"
+                    )
+                self.datatype = (
+                    datatype if datatype is not None else xml_element.get("datatype")
+                )
+                self.type_ = type_ if datatype is not None else xml_element.get("type")
+                if content is not None:
+                    self.content = content
+                elif len(xml_element) == 0:
+                    self.content = xml_element.text
+                else:
+                    self.content = []
+                    if xml_element.text is not None:
+                        self.content.append(xml_element.text)
+                    for sub in xml_element:
+                        if sub.tag != "sub":
+                            raise IncorrectTagError(
+                                expected_tag="sub", found_tag=sub.tag
+                            )
+                        self.content.append(Sub(sub))
+                        if sub.tail is not None:
+                            self.content.append(sub)
+            case None:
+                for attr, val in locals().items():
+                    if attr in ("self", "xml_element"):
+                        continue
+                    self.__setattr__(attr, val)
+            case _:
+                raise TypeError(
+                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
+                )
+
+    def export(self) -> Element:
+        element: Element = Element("sub")
+        if self.datatype is not None:
+            element.set("datatype", self.datatype)
+        if self.type_ is not None:
+            element.set("type", self.type_)
+        if isinstance(self.content, str):
+            element.text = self.content
+            return element
+        for index, elem in enumerate(self.content):
+            match (index, elem):
+                case (0, str()):
+                    element.text = elem
+                case (_, Sub()):
+                    element.append(elem.export())
+                case (_, str()):
+                    if element.text is not None:
+                        element.text += elem
+                    elif element.tail is None:
+                        element.tail = elem
+                    else:
+                        element.tail += elem
+        return element
