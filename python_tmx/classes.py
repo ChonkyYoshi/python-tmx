@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from re import MULTILINE, match
 from typing import Any, Iterable, Literal
-from xml.etree.ElementTree import Element
+from xml.etree.ElementTree import Element, tostring
 
 
 class IncorrectTagError(Exception):
@@ -362,7 +362,9 @@ class Ut(TmxTag):
                             )
                         self.content.append(Sub(sub))
                         if sub.tail is not None:
-                            self.content.append(sub)
+                            self.content.append(sub.tail)
+                    if xml_element.tail is not None:
+                        self.content.append(xml_element.tail)
             case None:
                 for attr, val in locals().items():
                     if attr in ("self", "xml_element"):
@@ -374,26 +376,36 @@ class Ut(TmxTag):
                 )
 
     def export(self) -> Element:
-        element: Element = Element("ut")
+        ut: Element = Element("ut")
+        ut.text, ut.tail = "", ""
         if self.x is not None:
-            element.set("x", self.x)
+            ut.set("x", self.x)
         if isinstance(self.content, str):
-            element.text = self.content
-            return element
+            ut.text = self.content
+            return ut
         for index, elem in enumerate(self.content):
             match (index, elem):
+                # case (_, None):
+                #     continue
+                # case (0, str()):
+                #     ut.text += elem
+                # case (_, str()) if len(ut) == 0:
+                #     ut.text += elem
+                # case (_, str()):
+                #     ut[-1].tail += elem
+                # case (_, Sub()):
+                #     ut.append(elem.export())
+                case (_, None):
+                    continue
                 case (0, str()):
-                    element.text = elem
-                case (_, Sub()):
-                    element.append(elem.export())
+                    print(elem)
+                case (_, str()) if len(ut) == 0:
+                    print(elem)
                 case (_, str()):
-                    if element.text is not None:
-                        element.text += elem
-                    elif element.tail is None:
-                        element.tail = elem
-                    else:
-                        element.tail += elem
-        return element
+                    print(elem)
+                case (_, Sub()):
+                    print(tostring(elem.export()))
+        return ut
 
 
 class Sub(TmxTag):
@@ -429,7 +441,9 @@ class Sub(TmxTag):
                             )
                         self.content.append(Sub(sub))
                         if sub.tail is not None:
-                            self.content.append(sub)
+                            self.content.append(sub.tail)
+                    if xml_element.tail is not None:
+                        self.content.append(xml_element.tail)
             case None:
                 for attr, val in locals().items():
                     if attr in ("self", "xml_element"):
@@ -441,25 +455,51 @@ class Sub(TmxTag):
                 )
 
     def export(self) -> Element:
-        element: Element = Element("sub")
+        sub: Element = Element("sub")
+        sub.text, sub.tail = "", ""
         if self.datatype is not None:
-            element.set("datatype", self.datatype)
+            sub.set("datatype", self.datatype)
         if self.type_ is not None:
-            element.set("type", self.type_)
+            sub.set("type", self.type_)
         if isinstance(self.content, str):
-            element.text = self.content
-            return element
+            sub.text = self.content
+            return sub
         for index, elem in enumerate(self.content):
             match (index, elem):
+                # case (_, None):
+                #     continue
+                # case (0, str()):
+                #     sub.text += elem
+                # case (_, str()) if len(sub) == 0:
+                #     sub.text += elem
+                # case (_, str()):
+                #     sub[-1].tail += elem
+                # case (_, Sub()):
+                #     sub.append(elem.export())
+                case (_, None):
+                    continue
                 case (0, str()):
-                    element.text = elem
-                case (_, Sub()):
-                    element.append(elem.export())
+                    print(elem)
+                case (_, str()) if len(sub) == 0:
+                    print(elem)
                 case (_, str()):
-                    if element.text is not None:
-                        element.text += elem
-                    elif element.tail is None:
-                        element.tail = elem
-                    else:
-                        element.tail += elem
-        return element
+                    print(elem)
+                case (_, Sub()):
+                    print(tostring(elem.export()))
+        return sub
+
+
+a = Element("ut")
+a.text = " ut.text "
+b = Element("sub")
+b.text = " sub.text "
+b.tail = " sub.tail "
+c = Element("sub")
+c.text = "sub.sub.text"
+c.tail = "sub.sub.tail"
+b.append(c)
+a.append(b)
+# print(tostring(a))
+# <ut>text from ut, before the first sub <sub>text from the first sub, not nested<sub>text from a nested sub in a sub</sub>tail from the nested sub</sub>tail from the first sub, should be the last string</ut>
+e = Ut(a)
+print(tostring(e.export()))
