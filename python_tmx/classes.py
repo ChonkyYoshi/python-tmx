@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from re import MULTILINE, match
 from typing import Any, Iterable, Literal
-from xml.etree.ElementTree import Element, tostring
+from xml.etree.ElementTree import Element
 
 
 class IncorrectTagError(Exception):
@@ -15,6 +15,8 @@ class IncorrectTagError(Exception):
 class TmxTag(ABC):
     @abstractmethod
     def export(self) -> Element: ...
+    @abstractmethod
+    def export_to_string(self) -> str: ...
 
 
 class Header(TmxTag):
@@ -363,8 +365,6 @@ class Ut(TmxTag):
                         self.content.append(Sub(sub))
                         if sub.tail is not None:
                             self.content.append(sub.tail)
-                    if xml_element.tail is not None:
-                        self.content.append(xml_element.tail)
             case None:
                 for attr, val in locals().items():
                     if attr in ("self", "xml_element"):
@@ -383,28 +383,16 @@ class Ut(TmxTag):
         if isinstance(self.content, str):
             ut.text = self.content
             return ut
-        for index, elem in enumerate(self.content):
-            match (index, elem):
-                # case (_, None):
-                #     continue
-                # case (0, str()):
-                #     ut.text += elem
-                # case (_, str()) if len(ut) == 0:
-                #     ut.text += elem
-                # case (_, str()):
-                #     ut[-1].tail += elem
-                # case (_, Sub()):
-                #     ut.append(elem.export())
-                case (_, None):
-                    continue
-                case (0, str()):
-                    print(elem)
-                case (_, str()) if len(ut) == 0:
-                    print(elem)
-                case (_, str()):
-                    print(elem)
-                case (_, Sub()):
-                    print(tostring(elem.export()))
+        for elem in self.content:
+            match elem:
+                case str() if len(ut) == 0:
+                    ut.text += elem
+                case str():
+                    ut[-1].tail += elem
+                case Sub():
+                    ut.append(elem.export())
+                case _:
+                    raise TypeError
         return ut
 
 
@@ -442,8 +430,6 @@ class Sub(TmxTag):
                         self.content.append(Sub(sub))
                         if sub.tail is not None:
                             self.content.append(sub.tail)
-                    if xml_element.tail is not None:
-                        self.content.append(xml_element.tail)
             case None:
                 for attr, val in locals().items():
                     if attr in ("self", "xml_element"):
@@ -464,42 +450,14 @@ class Sub(TmxTag):
         if isinstance(self.content, str):
             sub.text = self.content
             return sub
-        for index, elem in enumerate(self.content):
-            match (index, elem):
-                # case (_, None):
-                #     continue
-                # case (0, str()):
-                #     sub.text += elem
-                # case (_, str()) if len(sub) == 0:
-                #     sub.text += elem
-                # case (_, str()):
-                #     sub[-1].tail += elem
-                # case (_, Sub()):
-                #     sub.append(elem.export())
-                case (_, None):
-                    continue
-                case (0, str()):
-                    print(elem)
-                case (_, str()) if len(sub) == 0:
-                    print(elem)
-                case (_, str()):
-                    print(elem)
-                case (_, Sub()):
-                    print(tostring(elem.export()))
+        for elem in self.content:
+            match elem:
+                case str() if len(sub) == 0:
+                    sub.text += elem
+                case str():
+                    sub[-1].tail += elem
+                case Sub():
+                    sub.append(elem.export())
+                case _:
+                    raise TypeError
         return sub
-
-
-a = Element("ut")
-a.text = " ut.text "
-b = Element("sub")
-b.text = " sub.text "
-b.tail = " sub.tail "
-c = Element("sub")
-c.text = "sub.sub.text"
-c.tail = "sub.sub.tail"
-b.append(c)
-a.append(b)
-# print(tostring(a))
-# <ut>text from ut, before the first sub <sub>text from the first sub, not nested<sub>text from a nested sub in a sub</sub>tail from the nested sub</sub>tail from the first sub, should be the last string</ut>
-e = Ut(a)
-print(tostring(e.export()))
