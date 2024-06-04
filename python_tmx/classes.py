@@ -21,6 +21,8 @@ class Header(TmxTag):
     def __init__(
         self,
         xml_element: Element | None = None,
+        notes: Iterable[Note] | None = None,
+        props: Iterable[Prop] | None = None,
         creationtool: str | None = None,
         creationtoolversion: str | None = None,
         segtype: Literal["block", "paragraph", "sentence", "phrase"] | None = None,
@@ -33,8 +35,6 @@ class Header(TmxTag):
         creationid: str | None = None,
         changedate: datetime | str | None = None,
         changeid: str | None = None,
-        notes: Iterable[Note] | None = None,
-        props: Iterable[Prop] | None = None,
         udes: Iterable[Ude] | None = None,
     ) -> None:
         match xml_element:
@@ -487,17 +487,21 @@ class Bpt(TmxTag):
                     raise IncorrectTagError(
                         found_tag=xml_element.tag, expected_tag="bpt"
                     )
-                self.i = i if i is not None else int(xml_element.attrib["i"])
+                if i is not None:
+                    self.i = i
+                else:
+                    try:
+                        self.i = int(xml_element.get("i"))
+                    except TypeError:
+                        self.i = None
                 self.type_ = type_ if type_ is not None else xml_element.get("type")
-                self.x = (
-                    x
-                    if x is not None
-                    else (
-                        int(xml_element.attrib["x"])
-                        if xml_element.attrib["x"] is not None
-                        else None
-                    )
-                )
+                if x is not None:
+                    self.x = x
+                else:
+                    try:
+                        self.x = int(xml_element.get("x"))
+                    except TypeError:
+                        self.x = None
                 if content is not None:
                     self.content = content
                 elif len(xml_element) == 0:
@@ -562,7 +566,13 @@ class Ept(TmxTag):
                     raise IncorrectTagError(
                         found_tag=xml_element.tag, expected_tag="ept"
                     )
-                self.i = i if i is not None else int(xml_element.attrib["i"])
+                if i is not None:
+                    self.i = i
+                else:
+                    try:
+                        self.i = int(xml_element.get("i"))
+                    except TypeError:
+                        self.i = None
                 if content is not None:
                     self.content = content
                 elif len(xml_element) == 0:
@@ -625,16 +635,14 @@ class It(TmxTag):
                     raise IncorrectTagError(
                         found_tag=xml_element.tag, expected_tag="it"
                     )
-                self.pos = pos if pos is not None else xml_element.attrib["pos"]
-                self.x = (
-                    x
-                    if x is not None
-                    else (
-                        int(xml_element.attrib["x"])
-                        if xml_element.attrib["x"] is not None
-                        else None
-                    )
-                )
+                self.pos = pos if pos is not None else xml_element.get("pos")
+                if x is not None:
+                    self.x = x
+                else:
+                    try:
+                        self.x = int(xml_element.get("x"))
+                    except TypeError:
+                        self.x = None
                 self.type_ = type_ if type_ is not None else xml_element.get("type")
                 if content is not None:
                     self.content = content
@@ -669,6 +677,8 @@ class It(TmxTag):
             xml_element.set("x", str(self.x))
         if self.type_ is not None:
             xml_element.set("type", self.type_)
+        if self.pos is not None:
+            xml_element.set("pos", self.pos)
         if isinstance(self.content, str):
             xml_element.text = self.content
             return xml_element
@@ -700,15 +710,13 @@ class Ph(TmxTag):
                     raise IncorrectTagError(
                         found_tag=xml_element.tag, expected_tag="ph"
                     )
-                self.x = (
-                    x
-                    if x is not None
-                    else (
-                        int(xml_element.attrib["x"])
-                        if xml_element.attrib["x"] is not None
-                        else None
-                    )
-                )
+                if x is not None:
+                    self.x = x
+                else:
+                    try:
+                        self.x = int(xml_element.get("x"))
+                    except TypeError:
+                        self.x = None
                 self.type_ = type_ if type_ is not None else xml_element.get("type")
                 self.assoc = assoc if assoc is not None else xml_element.get("assoc")
                 if content is not None:
@@ -844,15 +852,13 @@ class Hi(TmxTag):
                     raise IncorrectTagError(
                         found_tag=xml_element.tag, expected_tag="hi"
                     )
-                self.x = (
-                    x
-                    if x is not None
-                    else (
-                        int(xml_element.attrib["x"])
-                        if xml_element.attrib["x"] is not None
-                        else None
-                    )
-                )
+                if x is not None:
+                    self.x = x
+                else:
+                    try:
+                        self.x = int(xml_element.get("x"))
+                    except TypeError:
+                        self.x = None
                 self.type_ = type_ if type_ is not None else xml_element.get("type")
                 if content is not None:
                     self.content = content
@@ -918,6 +924,8 @@ class Tuv(TmxTag):
     def __init__(
         self,
         xml_element: Element | None = None,
+        notes: Iterable[Note] | None = None,
+        props: Iterable[Prop] | None = None,
         segment: Seg | None = None,
         lang: str | None = None,
         o_encoding: str | None = None,
@@ -931,8 +939,6 @@ class Tuv(TmxTag):
         changedate: datetime | str | None = None,
         changeid: str | None = None,
         o_tmf: str | None = None,
-        notes: Iterable[Note] | None = None,
-        props: Iterable[Prop] | None = None,
     ) -> None:
         match xml_element:
             case Element():
@@ -1038,6 +1044,8 @@ class Tu(TmxTag):
     def __init__(
         self,
         xml_element: Element | None = None,
+        notes: Iterable[Note] | None = None,
+        props: Iterable[Prop] | None = None,
         tuvs: Iterable[Tuv] | None = None,
         tuid: int | None = None,
         o_encoding: str | None = None,
@@ -1053,8 +1061,6 @@ class Tu(TmxTag):
         changeid: str | None = None,
         o_tmf: str | None = None,
         srclang: str | None = None,
-        notes: Iterable[Note] | None = None,
-        props: Iterable[Prop] | None = None,
     ) -> None:
         match xml_element:
             case Element():
@@ -1181,5 +1187,7 @@ class Tmx(TmxTag):
     def export(self) -> Element:
         element: Element = Element("tmx", version="1.4")
         element.append(self.header.export())
-        element.extend([tu.export() for tu in self.tus])
+        body = Element("body")
+        body.extend([tu.export() for tu in self.tus])
+        element.append(body)
         return element
