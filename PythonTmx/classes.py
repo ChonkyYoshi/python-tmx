@@ -6,6 +6,25 @@ from re import MULTILINE, match
 from typing import Any, Iterable, Literal
 from xml.etree.ElementTree import Element
 
+__all__ = [
+    "Tmx",
+    "Header",
+    "Note",
+    "Prop",
+    "Ude",
+    "Map",
+    "Tu",
+    "Tuv",
+    "Seg",
+    "Hi",
+    "It",
+    "Ph",
+    "Bpt",
+    "Ept",
+    "Ut",
+    "Sub",
+]
+
 
 class IncorrectTagError(Exception):
     def __init__(self, found_tag: str, expected_tag: str) -> None:
