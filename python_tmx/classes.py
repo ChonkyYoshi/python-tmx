@@ -9,14 +9,12 @@ from xml.etree.ElementTree import Element
 
 class IncorrectTagError(Exception):
     def __init__(self, found_tag: str, expected_tag: str) -> None:
-        super().__init__(f"Expected <{expected_tag} but found <{found_tag}>")
+        super().__init__(f"Expected {expected_tag} but found {found_tag}")
 
 
 class TmxTag(ABC):
     @abstractmethod
     def export(self) -> Element: ...
-    @abstractmethod
-    def export_to_string(self) -> str: ...
 
 
 class Header(TmxTag):
@@ -70,13 +68,16 @@ class Header(TmxTag):
                         ):
                             self.__setattr__(attr, xml_element.get(attr))
                         case "creationdate" | "changedate":
-                            self.__setattr__(
-                                attr,
-                                datetime.strptime(
-                                    xml_element.get(attr.replace("_", "-")),
-                                    r"%Y%m%dT%H%M%SZ",
-                                ),
-                            )
+                            try:
+                                self.__setattr__(
+                                    attr,
+                                    datetime.strptime(
+                                        xml_element.get(attr.replace("_", "-")),
+                                        r"%Y%m%dT%H%M%SZ",
+                                    ),
+                                )
+                            except TypeError:
+                                self.__setattr__(attr, None)
                         case "o_tmf" | "o_encoding":
                             self.__setattr__(
                                 attr, xml_element.get(attr.replace("_", "-"))
@@ -188,7 +189,7 @@ class Note(TmxTag):
     def __init__(
         self,
         xml_element: Element | None = None,
-        content: Any | None = None,
+        content: str | None = None,
         lang: str | None = None,
         o_encoding: str | None = None,
     ) -> None:
@@ -327,19 +328,19 @@ class Map(TmxTag):
                 )
 
     def export(self) -> Element:
-        element: Element = Element("map")
+        xml_element: Element = Element("map")
         for attr, val in vars(self).items():
             if val is None:
                 continue
-            element.set(attr, val)
-        return element
+            xml_element.set(attr, val)
+        return xml_element
 
 
 class Ut(TmxTag):
     def __init__(
         self,
         xml_element: Element | None = None,
-        content: Iterable | str | None = None,
+        content: Iterable[str | Sub] | str | None = None,
         x: int | None = None,
     ) -> None:
         match xml_element:
@@ -348,7 +349,15 @@ class Ut(TmxTag):
                     raise IncorrectTagError(
                         found_tag=xml_element.tag, expected_tag="ut"
                     )
-                self.x = x if x is not None else xml_element.get("x")
+                self.x = (
+                    x
+                    if x is not None
+                    else (
+                        int(xml_element.attrib["x"])
+                        if xml_element.attrib["x"] is not None
+                        else None
+                    )
+                )
                 if content is not None:
                     self.content = content
                 elif len(xml_element) == 0:
@@ -357,14 +366,14 @@ class Ut(TmxTag):
                     self.content = []
                     if xml_element.text is not None:
                         self.content.append(xml_element.text)
-                    for sub in xml_element:
-                        if sub.tag != "sub":
+                    for child in xml_element:
+                        if child.tag != "sub":
                             raise IncorrectTagError(
-                                expected_tag="sub", found_tag=sub.tag
+                                expected_tag="sub", found_tag=child.tag
                             )
-                        self.content.append(Sub(sub))
-                        if sub.tail is not None:
-                            self.content.append(sub.tail)
+                        self.content.append(Sub(child))
+                        if child.tail is not None:
+                            self.content.append(child.tail)
             case None:
                 for attr, val in locals().items():
                     if attr in ("self", "xml_element"):
@@ -376,33 +385,33 @@ class Ut(TmxTag):
                 )
 
     def export(self) -> Element:
-        ut: Element = Element("ut")
-        ut.text, ut.tail = "", ""
+        xml_element: Element = Element("ut")
+        xml_element.text, xml_element.tail = "", ""
         if self.x is not None:
-            ut.set("x", self.x)
+            xml_element.set("x", str(self.x))
         if isinstance(self.content, str):
-            ut.text = self.content
-            return ut
-        for elem in self.content:
-            match elem:
-                case str() if len(ut) == 0:
-                    ut.text += elem
+            xml_element.text = self.content
+            return xml_element
+        for part in self.content:
+            match part:
+                case str() if len(xml_element) == 0:
+                    xml_element.text += part
                 case str():
-                    ut[-1].tail += elem
+                    xml_element[-1].tail += part
                 case Sub():
-                    ut.append(elem.export())
+                    xml_element.append(part.export())
                 case _:
                     raise TypeError
-        return ut
+        return xml_element
 
 
 class Sub(TmxTag):
     def __init__(
         self,
         xml_element: Element | None = None,
-        content: Iterable | str | None = None,
-        datatype: int | None = None,
-        type_: int | None = None,
+        content: Iterable[Bpt] | str | None = None,
+        datatype: str | None = None,
+        type_: str | None = None,
     ) -> None:
         match xml_element:
             case Element():
@@ -413,7 +422,7 @@ class Sub(TmxTag):
                 self.datatype = (
                     datatype if datatype is not None else xml_element.get("datatype")
                 )
-                self.type_ = type_ if datatype is not None else xml_element.get("type")
+                self.type_ = type_ if type_ is not None else xml_element.get("type")
                 if content is not None:
                     self.content = content
                 elif len(xml_element) == 0:
@@ -422,14 +431,14 @@ class Sub(TmxTag):
                     self.content = []
                     if xml_element.text is not None:
                         self.content.append(xml_element.text)
-                    for sub in xml_element:
-                        if sub.tag != "sub":
+                    for child in xml_element:
+                        if child.tag != "sub":
                             raise IncorrectTagError(
-                                expected_tag="sub", found_tag=sub.tag
+                                expected_tag="sub", found_tag=child.tag
                             )
-                        self.content.append(Sub(sub))
-                        if sub.tail is not None:
-                            self.content.append(sub.tail)
+                        self.content.append(Sub(child))
+                        if child.tail is not None:
+                            self.content.append(child.tail)
             case None:
                 for attr, val in locals().items():
                     if attr in ("self", "xml_element"):
@@ -441,23 +450,736 @@ class Sub(TmxTag):
                 )
 
     def export(self) -> Element:
-        sub: Element = Element("sub")
-        sub.text, sub.tail = "", ""
+        xml_element: Element = Element("sub")
+        xml_element.text, xml_element.tail = "", ""
         if self.datatype is not None:
-            sub.set("datatype", self.datatype)
+            xml_element.set("datatype", self.datatype)
         if self.type_ is not None:
-            sub.set("type", self.type_)
+            xml_element.set("type", self.type_)
         if isinstance(self.content, str):
-            sub.text = self.content
-            return sub
-        for elem in self.content:
-            match elem:
-                case str() if len(sub) == 0:
-                    sub.text += elem
+            xml_element.text = self.content
+            return xml_element
+        for part in self.content:
+            match part:
+                case str() if len(xml_element) == 0:
+                    xml_element.text += part
                 case str():
-                    sub[-1].tail += elem
+                    xml_element[-1].tail += part
                 case Sub():
-                    sub.append(elem.export())
+                    xml_element.append(part.export())
                 case _:
                     raise TypeError
-        return sub
+        return xml_element
+
+
+class Bpt(TmxTag):
+    def __init__(
+        self,
+        xml_element: Element | None = None,
+        content: Iterable[str | Sub] | str | None = None,
+        i: int | None = None,
+        x: int | None = None,
+        type_: str | None = None,
+    ) -> None:
+        match xml_element:
+            case Element():
+                if xml_element.tag != "bpt":
+                    raise IncorrectTagError(
+                        found_tag=xml_element.tag, expected_tag="bpt"
+                    )
+                self.i = i if i is not None else int(xml_element.attrib["i"])
+                self.type_ = type_ if type_ is not None else xml_element.get("type")
+                self.x = (
+                    x
+                    if x is not None
+                    else (
+                        int(xml_element.attrib["x"])
+                        if xml_element.attrib["x"] is not None
+                        else None
+                    )
+                )
+                if content is not None:
+                    self.content = content
+                elif len(xml_element) == 0:
+                    self.content = xml_element.text
+                else:
+                    self.content = []
+                    if xml_element.text is not None:
+                        self.content.append(xml_element.text)
+                    for child in xml_element:
+                        if child.tag != "sub":
+                            raise IncorrectTagError(
+                                expected_tag="sub", found_tag=child.tag
+                            )
+                        self.content.append(Sub(child))
+                        if child.tail is not None:
+                            self.content.append(child.tail)
+            case None:
+                for attr, val in locals().items():
+                    if attr in ("self", "xml_element"):
+                        continue
+                    self.__setattr__(attr, val)
+            case _:
+                raise TypeError(
+                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
+                )
+
+    def export(self) -> Element:
+        xml_element: Element = Element("bpt")
+        xml_element.text, xml_element.tail = "", ""
+        if self.i is not None:
+            xml_element.set("i", str(self.i))
+        if self.x is not None:
+            xml_element.set("x", str(self.x))
+        if self.type_ is not None:
+            xml_element.set("type", self.type_)
+        if isinstance(self.content, str):
+            xml_element.text = self.content
+            return xml_element
+        for part in self.content:
+            match part:
+                case str() if len(xml_element) == 0:
+                    xml_element.text += part
+                case str():
+                    xml_element[-1].tail += part
+                case Sub():
+                    xml_element.append(part.export())
+                case _:
+                    raise TypeError
+        return xml_element
+
+
+class Ept(TmxTag):
+    def __init__(
+        self,
+        xml_element: Element | None = None,
+        content: Iterable[str | Sub] | str | None = None,
+        i: int | None = None,
+    ) -> None:
+        match xml_element:
+            case Element():
+                if xml_element.tag != "ept":
+                    raise IncorrectTagError(
+                        found_tag=xml_element.tag, expected_tag="ept"
+                    )
+                self.i = i if i is not None else int(xml_element.attrib["i"])
+                if content is not None:
+                    self.content = content
+                elif len(xml_element) == 0:
+                    self.content = xml_element.text
+                else:
+                    self.content = []
+                    if xml_element.text is not None:
+                        self.content.append(xml_element.text)
+                    for child in xml_element:
+                        if child.tag != "sub":
+                            raise IncorrectTagError(
+                                expected_tag="sub", found_tag=child.tag
+                            )
+                        self.content.append(Sub(child))
+                        if child.tail is not None:
+                            self.content.append(child.tail)
+            case None:
+                for attr, val in locals().items():
+                    if attr in ("self", "xml_element"):
+                        continue
+                    self.__setattr__(attr, val)
+            case _:
+                raise TypeError(
+                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
+                )
+
+    def export(self) -> Element:
+        xml_element: Element = Element("ept")
+        xml_element.text, xml_element.tail = "", ""
+        if self.i is not None:
+            xml_element.set("i", str(self.i))
+        if isinstance(self.content, str):
+            xml_element.text = self.content
+            return xml_element
+        for part in self.content:
+            match part:
+                case str() if len(xml_element) == 0:
+                    xml_element.text += part
+                case str():
+                    xml_element[-1].tail += part
+                case Sub():
+                    xml_element.append(part.export())
+                case _:
+                    raise TypeError
+        return xml_element
+
+
+class It(TmxTag):
+    def __init__(
+        self,
+        xml_element: Element | None = None,
+        content: Iterable[str | Sub] | str | None = None,
+        pos: Literal["begin" | "end"] | None = None,
+        x: int | None = None,
+        type_: str | None = None,
+    ) -> None:
+        match xml_element:
+            case Element():
+                if xml_element.tag != "it":
+                    raise IncorrectTagError(
+                        found_tag=xml_element.tag, expected_tag="it"
+                    )
+                self.pos = pos if pos is not None else xml_element.attrib["pos"]
+                self.x = (
+                    x
+                    if x is not None
+                    else (
+                        int(xml_element.attrib["x"])
+                        if xml_element.attrib["x"] is not None
+                        else None
+                    )
+                )
+                self.type_ = type_ if type_ is not None else xml_element.get("type")
+                if content is not None:
+                    self.content = content
+                elif len(xml_element) == 0:
+                    self.content = xml_element.text
+                else:
+                    self.content = []
+                    if xml_element.text is not None:
+                        self.content.append(xml_element.text)
+                    for child in xml_element:
+                        if child.tag != "sub":
+                            raise IncorrectTagError(
+                                expected_tag="sub", found_tag=child.tag
+                            )
+                        self.content.append(Sub(child))
+                        if child.tail is not None:
+                            self.content.append(child.tail)
+            case None:
+                for attr, val in locals().items():
+                    if attr in ("self", "xml_element"):
+                        continue
+                    self.__setattr__(attr, val)
+            case _:
+                raise TypeError(
+                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
+                )
+
+    def export(self) -> Element:
+        xml_element: Element = Element("it")
+        xml_element.text, xml_element.tail = "", ""
+        if self.x is not None:
+            xml_element.set("x", str(self.x))
+        if self.type_ is not None:
+            xml_element.set("type", self.type_)
+        if isinstance(self.content, str):
+            xml_element.text = self.content
+            return xml_element
+        for part in self.content:
+            match part:
+                case str() if len(xml_element) == 0:
+                    xml_element.text += part
+                case str():
+                    xml_element[-1].tail += part
+                case Sub():
+                    xml_element.append(part.export())
+                case _:
+                    raise TypeError
+        return xml_element
+
+
+class Ph(TmxTag):
+    def __init__(
+        self,
+        xml_element: Element | None = None,
+        content: Iterable[str | Sub] | str | None = None,
+        x: int | None = None,
+        type_: str | None = None,
+        assoc: Literal["p", "f", "b"] | None = None,
+    ) -> None:
+        match xml_element:
+            case Element():
+                if xml_element.tag != "ph":
+                    raise IncorrectTagError(
+                        found_tag=xml_element.tag, expected_tag="ph"
+                    )
+                self.x = (
+                    x
+                    if x is not None
+                    else (
+                        int(xml_element.attrib["x"])
+                        if xml_element.attrib["x"] is not None
+                        else None
+                    )
+                )
+                self.type_ = type_ if type_ is not None else xml_element.get("type")
+                self.assoc = assoc if assoc is not None else xml_element.get("assoc")
+                if content is not None:
+                    self.content = content
+                elif len(xml_element) == 0:
+                    self.content = xml_element.text
+                else:
+                    self.content = []
+                    if xml_element.text is not None:
+                        self.content.append(xml_element.text)
+                    for child in xml_element:
+                        if child.tag != "sub":
+                            raise IncorrectTagError(
+                                expected_tag="sub", found_tag=child.tag
+                            )
+                        self.content.append(Sub(child))
+                        if child.tail is not None:
+                            self.content.append(child.tail)
+            case None:
+                for attr, val in locals().items():
+                    if attr in ("self", "xml_element"):
+                        continue
+                    self.__setattr__(attr, val)
+            case _:
+                raise TypeError(
+                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
+                )
+
+    def export(self) -> Element:
+        xml_element: Element = Element("ph")
+        xml_element.text, xml_element.tail = "", ""
+        if self.x is not None:
+            xml_element.set("x", str(self.x))
+        if self.assoc is not None:
+            xml_element.set("assoc", self.assoc)
+        if self.type_ is not None:
+            xml_element.set("type", self.type_)
+        if isinstance(self.content, str):
+            xml_element.text = self.content
+            return xml_element
+        for part in self.content:
+            match part:
+                case str() if len(xml_element) == 0:
+                    xml_element.text += part
+                case str():
+                    xml_element[-1].tail += part
+                case Sub():
+                    xml_element.append(part.export())
+                case _:
+                    raise TypeError
+        return xml_element
+
+
+class Seg(TmxTag):
+    def __init__(
+        self,
+        xml_element: Element | None = None,
+        content: Iterable[str | Bpt | Ept | It | Ph | Hi] | str | None = None,
+    ) -> None:
+        match xml_element:
+            case Element():
+                if xml_element.tag != "seg":
+                    raise IncorrectTagError(
+                        found_tag=xml_element.tag, expected_tag="seg"
+                    )
+                if content is not None:
+                    self.content = content
+                elif len(xml_element) == 0:
+                    self.content = xml_element.text
+                else:
+                    self.content = []
+                    if xml_element.text is not None:
+                        self.content.append(xml_element.text)
+                    for child in xml_element:
+                        match child.tag:
+                            case "ph":
+                                self.content.append(Ph(xml_element=child))
+                            case "bpt":
+                                self.content.append(Bpt(xml_element=child))
+                            case "ept":
+                                self.content.append(Ept(xml_element=child))
+                            case "it":
+                                self.content.append(It(xml_element=child))
+                            case "hi":
+                                self.content.append(Hi(xml_element=child))
+                            case _:
+                                raise IncorrectTagError(
+                                    found_tag=child.tag,
+                                    expected_tag="one of ph, bpt, ept, hi, it",
+                                )
+                        if child.tail is not None:
+                            self.content.append(child.tail)
+            case None:
+                for attr, val in locals().items():
+                    if attr in ("self", "xml_element"):
+                        continue
+                    self.__setattr__(attr, val)
+            case _:
+                raise TypeError(
+                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
+                )
+
+    def export(self) -> Element:
+        xml_element: Element = Element("seg")
+        xml_element.text, xml_element.tail = "", ""
+        if isinstance(self.content, str):
+            xml_element.text = self.content
+            return xml_element
+        for part in self.content:
+            match part:
+                case str() if len(xml_element) == 0:
+                    xml_element.text += part
+                case str():
+                    xml_element[-1].tail += part
+                case Bpt() | Ept() | Hi() | It() | Ph():
+                    xml_element.append(part.export())
+                case _:
+                    raise TypeError
+        return xml_element
+
+
+class Hi(TmxTag):
+    def __init__(
+        self,
+        xml_element: Element | None = None,
+        content: Iterable[str | Bpt | Ept | It | Ph | Hi] | str | None = None,
+        x: int | None = None,
+        type_: str | None = None,
+    ) -> None:
+        match xml_element:
+            case Element():
+                if xml_element.tag != "hi":
+                    raise IncorrectTagError(
+                        found_tag=xml_element.tag, expected_tag="hi"
+                    )
+                self.x = (
+                    x
+                    if x is not None
+                    else (
+                        int(xml_element.attrib["x"])
+                        if xml_element.attrib["x"] is not None
+                        else None
+                    )
+                )
+                self.type_ = type_ if type_ is not None else xml_element.get("type")
+                if content is not None:
+                    self.content = content
+                elif len(xml_element) == 0:
+                    self.content = xml_element.text
+                else:
+                    self.content = []
+                    if xml_element.text is not None:
+                        self.content.append(xml_element.text)
+                    for child in xml_element:
+                        match child.tag:
+                            case "ph":
+                                self.content.append(Ph(xml_element=child))
+                            case "bpt":
+                                self.content.append(Bpt(xml_element=child))
+                            case "ept":
+                                self.content.append(Ept(xml_element=child))
+                            case "it":
+                                self.content.append(It(xml_element=child))
+                            case "hi":
+                                self.content.append(Hi(xml_element=child))
+                            case _:
+                                raise IncorrectTagError(
+                                    found_tag=child.tag,
+                                    expected_tag="one of ph, bpt, ept, hi, it",
+                                )
+                        if child.tail is not None:
+                            self.content.append(child.tail)
+            case None:
+                for attr, val in locals().items():
+                    if attr in ("self", "xml_element"):
+                        continue
+                    self.__setattr__(attr, val)
+            case _:
+                raise TypeError(
+                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
+                )
+
+    def export(self) -> Element:
+        xml_element: Element = Element("hi")
+        xml_element.text, xml_element.tail = "", ""
+        if self.x is not None:
+            xml_element.set("x", str(self.x))
+        if self.type_ is not None:
+            xml_element.set("type", self.type_)
+        if isinstance(self.content, str):
+            xml_element.text = self.content
+            return xml_element
+        for part in self.content:
+            match part:
+                case str() if len(xml_element) == 0:
+                    xml_element.text += part
+                case str():
+                    xml_element[-1].tail += part
+                case Bpt() | Ept() | Hi() | It() | Ph():
+                    xml_element.append(part.export())
+                case _:
+                    raise TypeError
+        return xml_element
+
+
+class Tuv(TmxTag):
+    def __init__(
+        self,
+        xml_element: Element | None = None,
+        segment: Seg | None = None,
+        lang: str | None = None,
+        o_encoding: str | None = None,
+        datatype: str | None = None,
+        usagecount: int | None = None,
+        lastusagedate: datetime | str | None = None,
+        creationtool: str | None = None,
+        creationtoolversion: str | None = None,
+        creationdate: datetime | str | None = None,
+        creationid: str | None = None,
+        changedate: datetime | str | None = None,
+        changeid: str | None = None,
+        o_tmf: str | None = None,
+        notes: Iterable[Note] | None = None,
+        props: Iterable[Prop] | None = None,
+    ) -> None:
+        match xml_element:
+            case Element():
+                if xml_element.tag != "tuv":
+                    raise IncorrectTagError(
+                        found_tag=xml_element.tag, expected_tag="tuv"
+                    )
+                if xml_element.text is not None and not match(
+                    r"^[\n\s]+$", xml_element.text, flags=MULTILINE
+                ):
+                    raise ValueError(
+                        f"<tuv> tags are not allowed to have text but element has the following:\n{xml_element.text}"
+                    )
+                for attr, val in locals().items():
+                    if attr in ("self", "xml_element"):
+                        continue
+                    if val is not None:
+                        self.__setattr__(attr, val)
+                        continue
+                    match attr:
+                        case "segment":
+                            self.segment = Seg(xml_element=xml_element.find("seg"))
+                        case "lang":
+                            self.lang = xml_element.get(
+                                "{http://www.w3.org/XML/1998/namespace}lang"
+                            )
+                        case (
+                            "datatype"
+                            | "creationtool"
+                            | "creationtoolversion"
+                            | "creationid"
+                            | "changeid"
+                        ):
+                            self.__setattr__(attr, xml_element.get(attr))
+                        case "creationdate" | "changedate" | "lastusagedate":
+                            try:
+                                self.__setattr__(
+                                    attr,
+                                    datetime.strptime(
+                                        xml_element.get(attr.replace("_", "-")),
+                                        r"%Y%m%dT%H%M%SZ",
+                                    ),
+                                )
+                            except TypeError:
+                                self.__setattr__(attr, None)
+                        case "o_tmf" | "o_encoding":
+                            self.__setattr__(
+                                attr, xml_element.get(attr.replace("_", "-"))
+                            )
+                        case "usagecount":
+                            try:
+                                self.__setattr__(attr, int(xml_element.get(attr)))
+                            except TypeError:
+                                self.__setattr__(attr, None)
+                        case "props":
+                            self.props = [
+                                Prop(prop) for prop in xml_element if prop.tag == "prop"
+                            ]
+                        case "notes":
+                            self.notes = [
+                                Note(note) for note in xml_element if note.tag == "note"
+                            ]
+            case None:
+                for attr, val in locals().items():
+                    if attr in ("self", "xml_element"):
+                        continue
+                    self.__setattr__(attr, val)
+            case _:
+                raise TypeError(
+                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
+                )
+
+    def export(self) -> Element:
+        element: Element = Element("tuv")
+        for attr, val in vars(self).items():
+            if val is None:
+                continue
+            if attr[1] == "_":
+                element.set(attr.replace("_", "-"), val)
+                continue
+            if isinstance(val, datetime):
+                element.set(attr, val.strftime(r"%Y%m%dT%H%M%SZ"))
+                continue
+            if attr == "lang":
+                element.set("{http://www.w3.org/XML/1998/namespace}lang", val)
+                continue
+            if isinstance(val, int):
+                element.set(attr, str(val))
+                continue
+            if isinstance(val, str):
+                element.set(attr, val)
+                continue
+            if isinstance(val, Seg):
+                element.append(val.export())
+                continue
+            if isinstance(val, Iterable):
+                element.extend([elem.export() for elem in val])
+                continue
+        return element
+
+
+class Tu(TmxTag):
+    def __init__(
+        self,
+        xml_element: Element | None = None,
+        tuvs: Iterable[Tuv] | None = None,
+        tuid: int | None = None,
+        o_encoding: str | None = None,
+        datatype: str | None = None,
+        usagecount: int | None = None,
+        lastusagedate: datetime | str | None = None,
+        creationtool: str | None = None,
+        creationtoolversion: str | None = None,
+        creationdate: datetime | str | None = None,
+        creationid: str | None = None,
+        changedate: datetime | str | None = None,
+        segtype: Literal["block", "paragraph" | "sentence" | "phrase"] | None = None,
+        changeid: str | None = None,
+        o_tmf: str | None = None,
+        srclang: str | None = None,
+        notes: Iterable[Note] | None = None,
+        props: Iterable[Prop] | None = None,
+    ) -> None:
+        match xml_element:
+            case Element():
+                if xml_element.tag != "tu":
+                    raise IncorrectTagError(
+                        found_tag=xml_element.tag, expected_tag="tu"
+                    )
+                if xml_element.text is not None and not match(
+                    r"^[\n\s]+$", xml_element.text, flags=MULTILINE
+                ):
+                    raise ValueError(
+                        f"<tuv> tags are not allowed to have text but element has the following:\n{xml_element.text}"
+                    )
+                for attr, val in locals().items():
+                    if attr in ("self", "xml_element"):
+                        continue
+                    if val is not None:
+                        self.__setattr__(attr, val)
+                        continue
+                    match attr:
+                        case "tuvs":
+                            self.tuvs = [
+                                Tuv(xml_element=child)
+                                for child in xml_element
+                                if child.tag == "tuv"
+                            ]
+                        case (
+                            "datatype"
+                            | "creationtool"
+                            | "creationtoolversion"
+                            | "creationid"
+                            | "segtype"
+                            | "changeid"
+                            | "srclang"
+                        ):
+                            self.__setattr__(attr, xml_element.get(attr))
+                        case "creationdate" | "changedate" | "lastusagedate":
+                            try:
+                                self.__setattr__(
+                                    attr,
+                                    datetime.strptime(
+                                        xml_element.get(attr.replace("_", "-")),
+                                        r"%Y%m%dT%H%M%SZ",
+                                    ),
+                                )
+                            except TypeError:
+                                self.__setattr__(attr, None)
+                        case "o_tmf" | "o_encoding":
+                            self.__setattr__(
+                                attr, xml_element.get(attr.replace("_", "-"))
+                            )
+                        case "usagecount" | "tuid":
+                            try:
+                                self.__setattr__(attr, int(xml_element.get(attr)))
+                            except TypeError:
+                                self.__setattr__(attr, None)
+                        case "props":
+                            self.props = [
+                                Prop(prop) for prop in xml_element if prop.tag == "prop"
+                            ]
+                        case "notes":
+                            self.notes = [
+                                Note(note) for note in xml_element if note.tag == "note"
+                            ]
+            case None:
+                for attr, val in locals().items():
+                    if attr in ("self", "xml_element"):
+                        continue
+                    self.__setattr__(attr, val)
+            case _:
+                raise TypeError(
+                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
+                )
+
+    def export(self) -> Element:
+        element: Element = Element("tu")
+        for attr, val in vars(self).items():
+            if val is None:
+                continue
+            if attr[1] == "_":
+                element.set(attr.replace("_", "-"), val)
+                continue
+            if isinstance(val, datetime):
+                element.set(attr, val.strftime(r"%Y%m%dT%H%M%SZ"))
+                continue
+            if isinstance(val, int):
+                element.set(attr, str(val))
+                continue
+            if isinstance(val, str):
+                element.set(attr, val)
+                continue
+            if isinstance(val, Iterable):
+                element.extend([elem.export() for elem in val])
+                continue
+            if isinstance(val, Seg):
+                element.append(val.export())
+                continue
+        return element
+
+
+class Tmx(TmxTag):
+    def __init__(
+        self,
+        xml_element: Element | None = None,
+        header: Header | None = None,
+        tus: Iterable[Tu] | None = None,
+    ) -> None:
+        match xml_element:
+            case Element():
+                self.tus = [
+                    Tu(xml_element=child)
+                    for child in xml_element.find("body")
+                    if child.tag == "tu"
+                ]
+                self.header = Header(xml_element=xml_element.find("header"))
+            case None:
+                self.tus = tus
+                self.header = header
+            case _:
+                raise TypeError(
+                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
+                )
+
+    def export(self) -> Element:
+        element: Element = Element("tmx", version="1.4")
+        element.append(self.header.export())
+        element.extend([tu.export() for tu in self.tus])
+        return element
