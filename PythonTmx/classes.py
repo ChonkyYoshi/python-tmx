@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from re import MULTILINE, match
 from typing import Any, Iterable, Literal
-from xml.etree.ElementTree import Element
+from xml.etree.ElementTree import Element, parse, tostring
 
 __all__ = [
     "Tmx",
@@ -56,92 +56,162 @@ class Header(TmxTag):
         changeid: str | None = None,
         udes: Iterable[Ude] | None = None,
     ) -> None:
-        match xml_element:
-            case Element():
-                if xml_element.tag != "header":
-                    raise IncorrectTagError(
-                        found_tag=xml_element.tag, expected_tag="header"
-                    )
-                if xml_element.text is not None and not match(
-                    r"^[\n\s]+$", xml_element.text, flags=MULTILINE
-                ):
-                    raise ValueError(
-                        f"<header> tags are not allowed to have text but element has the following:\n{xml_element.text}"
-                    )
-                for attr, val in locals().items():
-                    if attr in ("self", "xml_element"):
+        if not isinstance(xml_element, Element):
+            self.notes = notes
+            self.props = props
+            self.creationtool = creationtool
+            self.creationtoolversion = creationtoolversion
+            self.segtype = segtype
+            self.o_tmf = o_tmf
+            self.adminlang = adminlang
+            self.srclang = srclang
+            self.datatype = datatype
+            self.o_encoding = o_encoding
+            self.creationdate = creationdate
+            self.creationid = creationid
+            self.changedate = changedate
+            self.changeid = changeid
+            self.udes = udes
+        else:
+            if xml_element.tag != "header":
+                raise IncorrectTagError(
+                    found_tag=xml_element.tag, expected_tag="header"
+                )
+            if xml_element.text is not None and not match(
+                r"^[\n\s]+$", xml_element.text, flags=MULTILINE
+            ):
+                raise ValueError(
+                    f"<header> tags are not allowed to have text but element has the following:\n{xml_element.text}"
+                )
+            for attr, val in locals().items():
+                if attr in ("self", "xml_element"):
+                    continue
+                match attr:
+                    case "self" | "xml_element":
                         continue
-                    if val is not None:
-                        self.__setattr__(attr, val)
-                        continue
-                    match attr:
-                        case (
-                            "creationtool"
-                            | "creationtoolversion"
-                            | "segtype"
-                            | "adminlang"
-                            | "srclang"
-                            | "datatype"
-                            | "creationid"
-                            | "changeid"
-                        ):
-                            self.__setattr__(attr, xml_element.get(attr))
-                        case "creationdate" | "changedate":
+                    case "creationtool":
+                        self.creationtool = (
+                            creationtool
+                            if creationtool is not None
+                            else xml_element.attrib.get("creationtool")
+                        )
+                    case "creationtoolversion":
+                        self.creationtoolversion = (
+                            creationtoolversion
+                            if creationtoolversion is not None
+                            else xml_element.get("creationtoolversion")
+                        )
+                    case "segtype":
+                        self.segtype = (
+                            segtype
+                            if segtype is not None
+                            else xml_element.get("segtype")
+                        )
+                    case "o_tmf":
+                        self.o_tmf = (
+                            o_tmf if o_tmf is not None else xml_element.get("o-tmf")
+                        )
+                    case "adminlang":
+                        self.adminlang = (
+                            adminlang
+                            if adminlang is not None
+                            else xml_element.get("adminlang")
+                        )
+                    case "srclang":
+                        self.srclang = (
+                            srclang
+                            if srclang is not None
+                            else xml_element.get("srclang")
+                        )
+                    case "datatype":
+                        self.datatype = (
+                            datatype
+                            if datatype is not None
+                            else xml_element.get("datatype")
+                        )
+                    case "o_encoding":
+                        self.o_encoding = (
+                            o_encoding
+                            if o_encoding is not None
+                            else xml_element.get("o-encoding")
+                        )
+                    case "creationdate":
+                        if creationdate is not None:
+                            self.creationdate = creationdate
+                        else:
                             try:
-                                self.__setattr__(
-                                    attr,
-                                    datetime.strptime(
-                                        xml_element.get(attr.replace("_", "-")),
-                                        r"%Y%m%dT%H%M%SZ",
-                                    ),
+                                self.creationdate = datetime.strptime(
+                                    xml_element.get("creationdate"),
+                                    r"%Y%m%dT%H%M%SZ",
                                 )
                             except TypeError:
-                                self.__setattr__(attr, None)
-                        case "o_tmf" | "o_encoding":
-                            self.__setattr__(
-                                attr, xml_element.get(attr.replace("_", "-"))
-                            )
-                        case "props" | "notes" | "udes" if len(xml_element) == 0:
-                            continue
-                        case "props":
-                            self.props = [
-                                Prop(prop) for prop in xml_element if prop.tag == "prop"
-                            ]
-                        case "notes":
-                            self.notes = [
-                                Note(note) for note in xml_element if note.tag == "note"
-                            ]
-                        case "udes":
-                            self.udes = [
-                                Ude(ude) for ude in xml_element if ude.tag == "ude"
-                            ]
-            case None:
-                for attr, val in locals().items():
-                    if attr in ("self", "xml_element"):
+                                self.creationdate = xml_element.get("creationdate")
+                    case "creationid":
+                        self.creationid = (
+                            creationid
+                            if creationid is not None
+                            else xml_element.get("creationid")
+                        )
+                    case "changedate":
+                        if changedate is not None:
+                            self.changedate = changedate
+                        else:
+                            try:
+                                self.changedate = datetime.strptime(
+                                    xml_element.get("changedate"),
+                                    r"%Y%m%dT%H%M%SZ",
+                                )
+                            except TypeError:
+                                self.changedate = xml_element.get("changedate")
+                    case "changeid":
+                        self.changeid = (
+                            changeid
+                            if changeid is not None
+                            else xml_element.get("changeid")
+                        )
+                    case "props" | "notes" | "udes" if len(xml_element) == 0:
                         continue
-                    self.__setattr__(attr, val)
-            case _:
-                raise TypeError(
-                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
-                )
+                    case "props":
+                        self.props = [Prop(prop) for prop in xml_element.iter("prop")]
+                    case "notes":
+                        self.notes = [Note(note) for note in xml_element.iter("note")]
+                    case "udes":
+                        self.udes = [Ude(ude) for ude in xml_element.iter("ude")]
 
     def export(self) -> Element:
         element: Element = Element("header")
-        for attr, val in vars(self).items():
-            if val is None:
-                continue
-            if attr[1] == "_":
-                element.set(attr.replace("_", "-"), val)
-                continue
-            if isinstance(val, datetime):
-                element.set(attr, val.strftime(r"%Y%m%dT%H%M%SZ"))
-                continue
-            if isinstance(val, str):
-                element.set(attr, val)
-                continue
-            if isinstance(val, Iterable):
-                element.extend([elem.export() for elem in val])
-                continue
+        for key, val in vars(self).items():
+            match key:
+                case "notes" if isinstance(val, Iterable):
+                    element.extend([note.export() for note in val])
+                case "props" if isinstance(val, Iterable):
+                    element.extend([prop.export() for prop in val])
+                case "udes" if isinstance(val, Iterable):
+                    element.extend([ude.export() for ude in val])
+                case (
+                    "creationtool"
+                    | "creationtoolversion"
+                    | "segtype"
+                    | "adminlang"
+                    | "srclang"
+                    | "datatype"
+                    | "creationdate"
+                    | "creationid"
+                    | "changedate"
+                    | "changeid"
+                    | "o_encoding"
+                    | "o_tmf"
+                    | "creationdate"
+                    | "changedate"
+                ) if isinstance(val, (str, datetime)):
+                    if key in ("o_encoding", "o_tmf"):
+                        element.set(key.replace("_", "-"), val)
+                    elif key.endswith("date"):
+                        element.set(key, val.strftime(r"%Y%m%dT%H%M%SZ"))
+                    else:
+                        element.set(key, val)
+                case _:
+                    raise AttributeError
         return element
 
 
@@ -1210,3 +1280,7 @@ class Tmx(TmxTag):
         body.extend([tu.export() for tu in self.tus])
         element.append(body)
         return element
+
+
+a = Header(xml_element=parse("a.tmx").getroot()).export()
+print(tostring(a))
