@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from re import MULTILINE, match
 from typing import Iterable, Literal
-from xml.etree.ElementTree import Element, ElementTree, parse
+from xml.etree.ElementTree import Element
 
 __all__ = [
     "Tmx",
@@ -432,46 +432,8 @@ class Ut(TmxTag):
         content: Iterable[str | Sub] | str | None = None,
         x: int | None = None,
     ) -> None:
-        match xml_element:
-            case Element():
-                if xml_element.tag != "ut":
-                    raise IncorrectTagError(
-                        found_element=xml_element.tag, expected_element="ut"
-                    )
-                self.x = (
-                    x
-                    if x is not None
-                    else (
-                        int(xml_element.attrib["x"])
-                        if xml_element.attrib["x"] is not None
-                        else None
-                    )
-                )
-                if content is not None:
-                    self.content = content
-                elif len(xml_element) == 0:
-                    self.content = xml_element.text
-                else:
-                    self.content = []
-                    if xml_element.text is not None:
-                        self.content.append(xml_element.text)
-                    for child in xml_element:
-                        if child.tag != "sub":
-                            raise IncorrectTagError(
-                                expected_element="sub", found_element=child.tag
-                            )
-                        self.content.append(Sub(child))
-                        if child.tail is not None:
-                            self.content.append(child.tail)
-            case None:
-                for attr, val in locals().items():
-                    if attr in ("self", "xml_element"):
-                        continue
-                    self.__setattr__(attr, val)
-            case _:
-                raise TypeError(
-                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
-                )
+        if not isinstance(xml_element, Element):
+            
 
     def export(self) -> Element:
         xml_element: Element = Element("ut")
@@ -1282,8 +1244,8 @@ class Tmx(TmxTag):
         return element
 
 
-elem = parse("a.tmx").getroot()
-head = Header(xml_element=elem)
-head_elem = head.export()
-exp_tree = ElementTree(head_elem)
-exp_tree.write("b.tmx", encoding="utf-8")
+# elem = parse("a.tmx").getroot()
+# head = Header(xml_element=elem)
+# head_elem = head.export()
+# exp_tree = ElementTree(head_elem)
+# exp_tree.write("b.tmx", encoding="utf-8")
