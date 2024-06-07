@@ -182,36 +182,69 @@ class Header(TmxTag):
         element: Element = Element("header")
         for key, val in vars(self).items():
             match key:
-                case "notes" if isinstance(val, Iterable):
-                    element.extend([note.export() for note in val])
-                case "props" if isinstance(val, Iterable):
-                    element.extend([prop.export() for prop in val])
-                case "udes" if isinstance(val, Iterable):
-                    element.extend([ude.export() for ude in val])
+                case "notes" | "props" | "udes" if val is not None:
+                    element.extend([child.export() for child in val])
                 case (
                     "creationtool"
                     | "creationtoolversion"
-                    | "segtype"
                     | "adminlang"
                     | "srclang"
                     | "datatype"
-                    | "creationdate"
-                    | "creationid"
-                    | "changedate"
-                    | "changeid"
-                    | "o_encoding"
+                    | "segtype"
                     | "o_tmf"
-                    | "creationdate"
-                    | "changedate"
-                ) if isinstance(val, (str, datetime)):
-                    if key in ("o_encoding", "o_tmf"):
-                        element.set(key.replace("_", "-"), val)
-                    elif key.endswith("date"):
+                ) if val is None:
+                    raise AttributeError(f"missing header attribute {key}")
+                case (
+                    "creationtool"
+                    | "creationtoolversion"
+                    | "adminlang"
+                    | "srclang"
+                    | "datatype"
+                    | "segtype"
+                    | "o_tmf"
+                    | "o_encoding"
+                    | "creationid"
+                    | "changeid"
+                ) if not isinstance(val, str):
+                    raise TypeError(f"attribute {key} must be a string not {type(val)}")
+                case "segtype" if val not in (
+                    "block",
+                    "paragraph",
+                    "sentence",
+                    "phrase",
+                ):
+                    raise ValueError(
+                        f"segtype must be one of block, paragraph, sentence or phrase not {val}"
+                    )
+                case "creationdate" | "changedate" if not isinstance(
+                    val, (str, datetime)
+                ):
+                    raise TypeError(
+                        f"attribute {key} must be a string or a dateitme not {type(val)}"
+                    )
+                case "creationdate" | "changedate":
+                    try:
                         element.set(key, val.strftime(r"%Y%m%dT%H%M%SZ"))
-                    else:
+                    except TypeError:
+                        val = val.upper()
+                        if not match(r"\d{8}T\d{6}Z", val):
+                            raise ValueError(
+                                f"attribute {key} is not formatted correctly. if using a string, value should be formatted as YYYYMMDDTHHMMSSZ."
+                            )
                         element.set(key, val)
-                case _:
-                    raise AttributeError
+                case (
+                    "creationtool"
+                    | "creationtoolversion"
+                    | "adminlang"
+                    | "srclang"
+                    | "datatype"
+                    | "creationid"
+                    | "changeid"
+                    | "segtype"
+                ):
+                    element.set(key, val)
+                case "o_tmf" | "o_encoding":
+                    element.set(key.replace("_", "-"), val)
         return element
 
 
