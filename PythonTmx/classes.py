@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import datetime
 from re import MULTILINE, match
-from typing import Any, Iterable, Literal
+from typing import Iterable, Literal
 from xml.etree.ElementTree import Element, parse, tostring
 
 __all__ = [
@@ -27,8 +27,15 @@ __all__ = [
 
 
 class IncorrectTagError(Exception):
-    def __init__(self, found_tag: str, expected_tag: str) -> None:
-        super().__init__(f"Expected {expected_tag} but found {found_tag}")
+    def __init__(self, found_element: Element, expected_element: str) -> None:
+        super().__init__(f"Expected {expected_element} but found {found_element.tag}")
+
+
+class NonEmptyTagError(Exception):
+    def __init__(self, element: Element) -> None:
+        super().__init__(
+            f"Element {element.tag} is not allowed to have children but element has {len(element)} children"
+        )
 
 
 class TmxTag(ABC):
@@ -75,7 +82,7 @@ class Header(TmxTag):
         else:
             if xml_element.tag != "header":
                 raise IncorrectTagError(
-                    found_tag=xml_element.tag, expected_tag="header"
+                    found_element=xml_element, expected_element="header"
                 )
             if xml_element.text is not None and not match(
                 r"^[\n\s]+$", xml_element.text, flags=MULTILINE
@@ -83,100 +90,62 @@ class Header(TmxTag):
                 raise ValueError(
                     f"<header> tags are not allowed to have text but element has the following:\n{xml_element.text}"
                 )
-            for attr, val in locals().items():
-                if attr in ("self", "xml_element"):
-                    continue
-                match attr:
-                    case "self" | "xml_element":
-                        continue
-                    case "creationtool":
-                        self.creationtool = (
-                            creationtool
-                            if creationtool is not None
-                            else xml_element.attrib.get("creationtool")
-                        )
-                    case "creationtoolversion":
-                        self.creationtoolversion = (
-                            creationtoolversion
-                            if creationtoolversion is not None
-                            else xml_element.get("creationtoolversion")
-                        )
-                    case "segtype":
-                        self.segtype = (
-                            segtype
-                            if segtype is not None
-                            else xml_element.get("segtype")
-                        )
-                    case "o_tmf":
-                        self.o_tmf = (
-                            o_tmf if o_tmf is not None else xml_element.get("o-tmf")
-                        )
-                    case "adminlang":
-                        self.adminlang = (
-                            adminlang
-                            if adminlang is not None
-                            else xml_element.get("adminlang")
-                        )
-                    case "srclang":
-                        self.srclang = (
-                            srclang
-                            if srclang is not None
-                            else xml_element.get("srclang")
-                        )
-                    case "datatype":
-                        self.datatype = (
-                            datatype
-                            if datatype is not None
-                            else xml_element.get("datatype")
-                        )
-                    case "o_encoding":
-                        self.o_encoding = (
-                            o_encoding
-                            if o_encoding is not None
-                            else xml_element.get("o-encoding")
-                        )
-                    case "creationdate":
-                        if creationdate is not None:
-                            self.creationdate = creationdate
-                        else:
-                            try:
-                                self.creationdate = datetime.strptime(
-                                    xml_element.get("creationdate"),
-                                    r"%Y%m%dT%H%M%SZ",
-                                )
-                            except TypeError:
-                                self.creationdate = xml_element.get("creationdate")
-                    case "creationid":
-                        self.creationid = (
-                            creationid
-                            if creationid is not None
-                            else xml_element.get("creationid")
-                        )
-                    case "changedate":
-                        if changedate is not None:
-                            self.changedate = changedate
-                        else:
-                            try:
-                                self.changedate = datetime.strptime(
-                                    xml_element.get("changedate"),
-                                    r"%Y%m%dT%H%M%SZ",
-                                )
-                            except TypeError:
-                                self.changedate = xml_element.get("changedate")
-                    case "changeid":
-                        self.changeid = (
-                            changeid
-                            if changeid is not None
-                            else xml_element.get("changeid")
-                        )
-                    case "props" | "notes" | "udes" if len(xml_element) == 0:
-                        continue
-                    case "props":
-                        self.props = [Prop(prop) for prop in xml_element.iter("prop")]
-                    case "notes":
-                        self.notes = [Note(note) for note in xml_element.iter("note")]
-                    case "udes":
-                        self.udes = [Ude(ude) for ude in xml_element.iter("ude")]
+            self.creationtool = (
+                creationtool
+                if creationtool is not None
+                else xml_element.attrib.get("creationtool")
+            )
+            self.creationtoolversion = (
+                creationtoolversion
+                if creationtoolversion is not None
+                else xml_element.get("creationtoolversion")
+            )
+            self.segtype = (
+                segtype if segtype is not None else xml_element.get("segtype")
+            )
+            self.o_tmf = o_tmf if o_tmf is not None else xml_element.get("o-tmf")
+            self.adminlang = (
+                adminlang if adminlang is not None else xml_element.get("adminlang")
+            )
+            self.srclang = (
+                srclang if srclang is not None else xml_element.get("srclang")
+            )
+            self.datatype = (
+                datatype if datatype is not None else xml_element.get("datatype")
+            )
+            self.o_encoding = (
+                o_encoding if o_encoding is not None else xml_element.get("o-encoding")
+            )
+            if creationdate is not None:
+                self.creationdate = creationdate
+            else:
+                try:
+                    self.creationdate = datetime.strptime(
+                        xml_element.get("creationdate"),
+                        r"%Y%m%dT%H%M%SZ",
+                    )
+                except TypeError:
+                    self.creationdate = xml_element.get("creationdate")
+            self.creationid = (
+                creationid if creationid is not None else xml_element.get("creationid")
+            )
+            if changedate is not None:
+                self.changedate = changedate
+            else:
+                try:
+                    self.changedate = datetime.strptime(
+                        xml_element.get("changedate"),
+                        r"%Y%m%dT%H%M%SZ",
+                    )
+                except ValueError:
+                    self.changedate = xml_element.get("changedate")
+            self.changeid = (
+                changeid if changeid is not None else xml_element.get("changeid")
+            )
+            if len(xml_element):
+                self.props = [Prop(prop) for prop in xml_element.iter("prop")]
+                self.notes = [Note(note) for note in xml_element.iter("note")]
+                self.udes = [Ude(ude) for ude in xml_element.iter("ude")]
 
     def export(self) -> Element:
         element: Element = Element("header")
@@ -193,7 +162,7 @@ class Header(TmxTag):
                     | "segtype"
                     | "o_tmf"
                 ) if val is None:
-                    raise AttributeError(f"missing header attribute {key}")
+                    raise AttributeError(f"Header is missing required attribute {key}")
                 case (
                     "creationtool"
                     | "creationtoolversion"
@@ -252,52 +221,44 @@ class Prop(TmxTag):
     def __init__(
         self,
         xml_element: Element | None = None,
-        content: Any | None = None,
+        content: str | None = None,
         type_: str | None = None,
         lang: str | None = None,
         o_encoding: str | None = None,
     ) -> None:
-        match xml_element:
-            case Element():
-                if xml_element.tag != "prop":
-                    raise IncorrectTagError(
-                        found_tag=xml_element.tag, expected_tag="prop"
-                    )
-                for attr, val in locals().items():
-                    if attr in ["self", "xml_element"]:
-                        continue
-                    if val is not None:
-                        self.__setattr__(attr, val)
-                        continue
-                    match attr:
-                        case "content":
-                            self.content = xml_element.text
-                        case "type_":
-                            self.type_ = xml_element.get("type")
-                        case "lang":
-                            self.lang = xml_element.get(
-                                "{http://www.w3.org/XML/1998/namespace}lang"
-                            )
-                        case "o_encoding":
-                            self.o_encoding = xml_element.get("o-encoding")
-            case None:
-                for attr, val in locals().items():
-                    if attr in ("self", "xml_element"):
-                        continue
-                    self.__setattr__(attr, val)
-            case _:
-                raise TypeError(
-                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
+        if not isinstance(xml_element, Element):
+            self.content = content
+            self.type_ = type_
+            self.lang = lang
+            self.o_encoding = o_encoding
+        else:
+            if xml_element.tag != "prop":
+                raise IncorrectTagError(
+                    found_element=xml_element.tag, expected_element="prop"
                 )
+            if len(xml_element):
+                raise NonEmptyTagError(element=xml_element)
+            self.content = content if content is not None else xml_element.text
+            self.type_ = type_ if type_ is not None else xml_element.get("type")
+            self.lang = (
+                lang
+                if lang is not None
+                else xml_element.get("{http://www.w3.org/XML/1998/namespace}lang")
+            )
+            self.o_encoding = (
+                o_encoding if o_encoding is not None else xml_element.get("o-encoding")
+            )
 
     def export(self) -> Element:
         element: Element = Element("prop")
-        for attr, val in vars(self).items():
-            if val is None:
-                continue
-            match attr:
+        for key, val in vars(self).items():
+            match key:
+                case "type_" if val is None:
+                    raise AttributeError("Prop is missing required attribute type_")
+                case _ if not isinstance(val, (str, None)):
+                    raise TypeError(f"attribute {key} must be a string not {type(val)}")
                 case "content":
-                    element.text = val
+                    element.text = self.content
                 case "type_":
                     element.set("type", val)
                 case "lang":
@@ -315,45 +276,35 @@ class Note(TmxTag):
         lang: str | None = None,
         o_encoding: str | None = None,
     ) -> None:
-        match xml_element:
-            case Element():
-                if xml_element.tag != "note":
-                    raise IncorrectTagError(
-                        found_tag=xml_element.tag, expected_tag="note"
-                    )
-                for attr, val in locals().items():
-                    if attr in ["self", "xml_element"]:
-                        continue
-                    if val is not None:
-                        self.__setattr__(attr, val)
-                        continue
-                    match attr:
-                        case "content":
-                            self.content = xml_element.text
-                        case "lang":
-                            self.lang = xml_element.get(
-                                "{http://www.w3.org/XML/1998/namespace}lang"
-                            )
-                        case "o_encoding":
-                            self.o_encoding = xml_element.get("o-encoding")
-            case None:
-                for attr, val in locals().items():
-                    if attr in ("self", "xml_element"):
-                        continue
-                    self.__setattr__(attr, val)
-            case _:
-                raise TypeError(
-                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
+        if not isinstance(xml_element, Element):
+            self.content = content
+            self.lang = lang
+            self.o_encoding = o_encoding
+        else:
+            if xml_element.tag != "note":
+                raise IncorrectTagError(
+                    found_element=xml_element.tag, expected_element="note"
                 )
+            if len(xml_element):
+                raise NonEmptyTagError(element=xml_element)
+            self.content = content if content is not None else xml_element.text
+            self.lang = (
+                lang
+                if lang is not None
+                else xml_element.get("{http://www.w3.org/XML/1998/namespace}lang")
+            )
+            self.o_encoding = (
+                o_encoding if o_encoding is not None else xml_element.get("o-encoding")
+            )
 
     def export(self) -> Element:
-        element: Element = Element("note")
-        for attr, val in vars(self).items():
-            if val is None:
-                continue
-            match attr:
+        element: Element = Element("prop")
+        for key, val in vars(self).items():
+            match key:
+                case _ if not isinstance(val, (str, None)):
+                    raise TypeError(f"attribute {key} must be a string not {type(val)}")
                 case "content":
-                    element.text = val
+                    element.text = self.content
                 case "lang":
                     element.set("{http://www.w3.org/XML/1998/namespace}lang", val)
                 case "o_encoding":
@@ -373,7 +324,7 @@ class Ude(TmxTag):
             case Element():
                 if xml_element.tag != "ude":
                     raise IncorrectTagError(
-                        found_tag=xml_element.tag, expected_tag="ude"
+                        found_element=xml_element.tag, expected_element="ude"
                     )
                 for attr, val in locals().items():
                     if attr in ["self", "xml_element"]:
@@ -429,7 +380,7 @@ class Map(TmxTag):
             case Element():
                 if xml_element.tag != "map":
                     raise IncorrectTagError(
-                        found_tag=xml_element.tag, expected_tag="map"
+                        found_element=xml_element.tag, expected_element="map"
                     )
                 for attr, val in locals().items():
                     if attr in ["self", "xml_element"]:
@@ -469,7 +420,7 @@ class Ut(TmxTag):
             case Element():
                 if xml_element.tag != "ut":
                     raise IncorrectTagError(
-                        found_tag=xml_element.tag, expected_tag="ut"
+                        found_element=xml_element.tag, expected_element="ut"
                     )
                 self.x = (
                     x
@@ -491,7 +442,7 @@ class Ut(TmxTag):
                     for child in xml_element:
                         if child.tag != "sub":
                             raise IncorrectTagError(
-                                expected_tag="sub", found_tag=child.tag
+                                expected_element="sub", found_element=child.tag
                             )
                         self.content.append(Sub(child))
                         if child.tail is not None:
@@ -539,7 +490,7 @@ class Sub(TmxTag):
             case Element():
                 if xml_element.tag != "sub":
                     raise IncorrectTagError(
-                        found_tag=xml_element.tag, expected_tag="ut"
+                        found_element=xml_element.tag, expected_element="ut"
                     )
                 self.datatype = (
                     datatype if datatype is not None else xml_element.get("datatype")
@@ -556,7 +507,7 @@ class Sub(TmxTag):
                     for child in xml_element:
                         if child.tag != "sub":
                             raise IncorrectTagError(
-                                expected_tag="sub", found_tag=child.tag
+                                expected_element="sub", found_element=child.tag
                             )
                         self.content.append(Sub(child))
                         if child.tail is not None:
@@ -607,7 +558,7 @@ class Bpt(TmxTag):
             case Element():
                 if xml_element.tag != "bpt":
                     raise IncorrectTagError(
-                        found_tag=xml_element.tag, expected_tag="bpt"
+                        found_element=xml_element.tag, expected_element="bpt"
                     )
                 if i is not None:
                     self.i = i
@@ -635,7 +586,7 @@ class Bpt(TmxTag):
                     for child in xml_element:
                         if child.tag != "sub":
                             raise IncorrectTagError(
-                                expected_tag="sub", found_tag=child.tag
+                                expected_element="sub", found_element=child.tag
                             )
                         self.content.append(Sub(child))
                         if child.tail is not None:
@@ -686,7 +637,7 @@ class Ept(TmxTag):
             case Element():
                 if xml_element.tag != "ept":
                     raise IncorrectTagError(
-                        found_tag=xml_element.tag, expected_tag="ept"
+                        found_element=xml_element.tag, expected_element="ept"
                     )
                 if i is not None:
                     self.i = i
@@ -706,7 +657,7 @@ class Ept(TmxTag):
                     for child in xml_element:
                         if child.tag != "sub":
                             raise IncorrectTagError(
-                                expected_tag="sub", found_tag=child.tag
+                                expected_element="sub", found_element=child.tag
                             )
                         self.content.append(Sub(child))
                         if child.tail is not None:
@@ -755,7 +706,7 @@ class It(TmxTag):
             case Element():
                 if xml_element.tag != "it":
                     raise IncorrectTagError(
-                        found_tag=xml_element.tag, expected_tag="it"
+                        found_element=xml_element.tag, expected_element="it"
                     )
                 self.pos = pos if pos is not None else xml_element.get("pos")
                 if x is not None:
@@ -777,7 +728,7 @@ class It(TmxTag):
                     for child in xml_element:
                         if child.tag != "sub":
                             raise IncorrectTagError(
-                                expected_tag="sub", found_tag=child.tag
+                                expected_element="sub", found_element=child.tag
                             )
                         self.content.append(Sub(child))
                         if child.tail is not None:
@@ -830,7 +781,7 @@ class Ph(TmxTag):
             case Element():
                 if xml_element.tag != "ph":
                     raise IncorrectTagError(
-                        found_tag=xml_element.tag, expected_tag="ph"
+                        found_element=xml_element.tag, expected_element="ph"
                     )
                 if x is not None:
                     self.x = x
@@ -852,7 +803,7 @@ class Ph(TmxTag):
                     for child in xml_element:
                         if child.tag != "sub":
                             raise IncorrectTagError(
-                                expected_tag="sub", found_tag=child.tag
+                                expected_element="sub", found_element=child.tag
                             )
                         self.content.append(Sub(child))
                         if child.tail is not None:
@@ -902,7 +853,7 @@ class Seg(TmxTag):
             case Element():
                 if xml_element.tag != "seg":
                     raise IncorrectTagError(
-                        found_tag=xml_element.tag, expected_tag="seg"
+                        found_element=xml_element.tag, expected_element="seg"
                     )
                 if content is not None:
                     self.content = content
@@ -926,8 +877,8 @@ class Seg(TmxTag):
                                 self.content.append(Hi(xml_element=child))
                             case _:
                                 raise IncorrectTagError(
-                                    found_tag=child.tag,
-                                    expected_tag="one of ph, bpt, ept, hi, it",
+                                    found_element=child.tag,
+                                    expected_element="one of ph, bpt, ept, hi, it",
                                 )
                         if child.tail is not None:
                             self.content.append(child.tail)
@@ -972,7 +923,7 @@ class Hi(TmxTag):
             case Element():
                 if xml_element.tag != "hi":
                     raise IncorrectTagError(
-                        found_tag=xml_element.tag, expected_tag="hi"
+                        found_element=xml_element.tag, expected_element="hi"
                     )
                 if x is not None:
                     self.x = x
@@ -1004,8 +955,8 @@ class Hi(TmxTag):
                                 self.content.append(Hi(xml_element=child))
                             case _:
                                 raise IncorrectTagError(
-                                    found_tag=child.tag,
-                                    expected_tag="one of ph, bpt, ept, hi, it",
+                                    found_element=child.tag,
+                                    expected_element="one of ph, bpt, ept, hi, it",
                                 )
                         if child.tail is not None:
                             self.content.append(child.tail)
@@ -1066,7 +1017,7 @@ class Tuv(TmxTag):
             case Element():
                 if xml_element.tag != "tuv":
                     raise IncorrectTagError(
-                        found_tag=xml_element.tag, expected_tag="tuv"
+                        found_element=xml_element.tag, expected_element="tuv"
                     )
                 if xml_element.text is not None and not match(
                     r"^[\n\s]+$", xml_element.text, flags=MULTILINE
@@ -1188,7 +1139,7 @@ class Tu(TmxTag):
             case Element():
                 if xml_element.tag != "tu":
                     raise IncorrectTagError(
-                        found_tag=xml_element.tag, expected_tag="tu"
+                        found_element=xml_element.tag, expected_element="tu"
                     )
                 if xml_element.text is not None and not match(
                     r"^[\n\s]+$", xml_element.text, flags=MULTILINE
