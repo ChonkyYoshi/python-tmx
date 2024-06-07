@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from re import MULTILINE, match
 from typing import Iterable, Literal
-from xml.etree.ElementTree import Element, parse, tostring
+from xml.etree.ElementTree import Element, ElementTree, parse
 
 __all__ = [
     "Tmx",
@@ -28,13 +28,31 @@ __all__ = [
 
 class IncorrectTagError(Exception):
     def __init__(self, found_element: Element, expected_element: str) -> None:
-        super().__init__(f"Expected {expected_element} but found {found_element.tag}")
-
-
-class NonEmptyTagError(Exception):
-    def __init__(self, element: Element) -> None:
         super().__init__(
-            f"Element {element.tag} is not allowed to have children but element has {len(element)} children"
+            f"Expected a {expected_element} Element but found {found_element.tag} instead"
+        )
+
+
+class ExtraChildrenError(Exception):
+    def __init__(self, element: Element) -> None:
+        if len(element):
+            super().__init__(
+                f"Element {element.tag} is not allowed to have children but element has {len(element)} children"
+            )
+
+
+class ExtraTextError(Exception):
+    def __init__(self, element: Element) -> None:
+        if len(element):
+            super().__init__(
+                f"Element {element.tag} is not allowed to have text but element has the following text data:\n{element.tail}"
+            )
+
+
+class MissingRequiredAttributeError(Exception):
+    def __init__(self, element: Element, attribute: str) -> None:
+        super().__init__(
+            f"Element {element.tag} is missing required attribute {attribute}"
         )
 
 
@@ -87,9 +105,7 @@ class Header(TmxTag):
             if xml_element.text is not None and not match(
                 r"^[\n\s]+$", xml_element.text, flags=MULTILINE
             ):
-                raise ValueError(
-                    f"<header> tags are not allowed to have text but element has the following:\n{xml_element.text}"
-                )
+                raise ExtraTextError(element=xml_element)
             self.creationtool = (
                 creationtool
                 if creationtool is not None
@@ -162,7 +178,7 @@ class Header(TmxTag):
                     | "segtype"
                     | "o_tmf"
                 ) if val is None:
-                    raise AttributeError(f"Header is missing required attribute {key}")
+                    raise MissingRequiredAttributeError(element=element, attribute=key)
                 case (
                     "creationtool"
                     | "creationtoolversion"
@@ -237,7 +253,7 @@ class Prop(TmxTag):
                     found_element=xml_element.tag, expected_element="prop"
                 )
             if len(xml_element):
-                raise NonEmptyTagError(element=xml_element)
+                raise ExtraChildrenError(element=xml_element)
             self.content = content if content is not None else xml_element.text
             self.type_ = type_ if type_ is not None else xml_element.get("type")
             self.lang = (
@@ -254,8 +270,12 @@ class Prop(TmxTag):
         for key, val in vars(self).items():
             match key:
                 case "type_" if val is None:
-                    raise AttributeError("Prop is missing required attribute type_")
-                case _ if not isinstance(val, (str, None)):
+                    raise MissingRequiredAttributeError(
+                        element=element, attribute="type_"
+                    )
+                case _ if val is None:
+                    continue
+                case _ if not isinstance(val, str):
                     raise TypeError(f"attribute {key} must be a string not {type(val)}")
                 case "content":
                     element.text = self.content
@@ -286,7 +306,7 @@ class Note(TmxTag):
                     found_element=xml_element.tag, expected_element="note"
                 )
             if len(xml_element):
-                raise NonEmptyTagError(element=xml_element)
+                raise ExtraChildrenError(element=xml_element)
             self.content = content if content is not None else xml_element.text
             self.lang = (
                 lang
@@ -298,10 +318,12 @@ class Note(TmxTag):
             )
 
     def export(self) -> Element:
-        element: Element = Element("prop")
+        element: Element = Element("note")
         for key, val in vars(self).items():
             match key:
-                case _ if not isinstance(val, (str, None)):
+                case _ if val is None:
+                    continue
+                case _ if not isinstance(val, str):
                     raise TypeError(f"attribute {key} must be a string not {type(val)}")
                 case "content":
                     element.text = self.content
@@ -316,54 +338,45 @@ class Ude(TmxTag):
     def __init__(
         self,
         xml_element: Element | None = None,
-        maps: Iterable[map] | None = None,
+        maps: Iterable[Map] | None = None,
         name: str | None = None,
         base: str | None = None,
     ) -> None:
-        match xml_element:
-            case Element():
-                if xml_element.tag != "ude":
-                    raise IncorrectTagError(
-                        found_element=xml_element.tag, expected_element="ude"
-                    )
-                for attr, val in locals().items():
-                    if attr in ["self", "xml_element"]:
-                        continue
-                    if val is not None:
-                        self.__setattr__(attr, val)
-                        continue
-                    match attr:
-                        case "name":
-                            self.name = xml_element.get("name")
-                        case "base":
-                            self.base = xml_element.get("base")
-                        case "maps":
-                            if len(xml_element) == 0:
-                                self.maps = None
-                                continue
-                            self.maps = [
-                                Map(map_) for map_ in xml_element if map_.tag == "map"
-                            ]
-            case None:
-                for attr, val in locals().items():
-                    if attr in ("self", "xml_element"):
-                        continue
-                    self.__setattr__(attr, val)
-            case _:
-                raise TypeError(
-                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
+        if not isinstance(xml_element, Element):
+            self.maps = maps
+            self.name = name
+            self.base = base
+        else:
+            if xml_element.tag != "ude":
+                raise IncorrectTagError(
+                    found_element=xml_element.tag, expected_element="ude"
                 )
+            if xml_element.text is not None and not match(
+                r"^[\n\s]+$", xml_element.text, flags=MULTILINE
+            ):
+                raise ExtraTextError(element=xml_element)
+            self.maps = (
+                maps
+                if maps is not None
+                else [Map(xml_element=map_) for map_ in xml_element.iter("map")]
+            )
+            self.name = name if name is not None else xml_element.get("name")
+            self.base = base if base is not None else xml_element.get("base")
 
     def export(self) -> Element:
         element: Element = Element("ude")
-        for attr, val in vars(self).items():
-            if val is None:
-                continue
-            match attr:
-                case "name" | "base":
-                    element.set(attr, val)
-                case "maps":
-                    element.extend([elem.export() for elem in self.maps])
+        if len(self.maps):
+            for map_ in self.maps:
+                if map_.code is not None:
+                    need_base = True
+                element.append(map_.export())
+            if need_base and not self.base:
+                raise MissingRequiredAttributeError(element=element, attribute="base")
+            elif self.base:
+                element.set("base", self.base)
+        if not self.name:
+            raise AttributeError("Ude is missing required attribute name")
+        element.set("name", self.name)
         return element
 
 
@@ -371,42 +384,45 @@ class Map(TmxTag):
     def __init__(
         self,
         xml_element: Element | None = None,
-        unicode: str | None = None,
+        unicode: Iterable[Map] | None = None,
         code: str | None = None,
         ent: str | None = None,
         subst: str | None = None,
     ) -> None:
-        match xml_element:
-            case Element():
-                if xml_element.tag != "map":
-                    raise IncorrectTagError(
-                        found_element=xml_element.tag, expected_element="map"
-                    )
-                for attr, val in locals().items():
-                    if attr in ["self", "xml_element"]:
-                        continue
-                    if val is not None:
-                        self.__setattr__(attr, val)
-                        continue
-                    else:
-                        self.__setattr__(attr, xml_element.get(attr))
-            case None:
-                for attr, val in locals().items():
-                    if attr in ("self", "xml_element"):
-                        continue
-                    self.__setattr__(attr, val)
-            case _:
-                raise TypeError(
-                    f"`xml_Element` can only be of type Element or None not {type(xml_element)}"
+        if not isinstance(xml_element, Element):
+            self.unicode = unicode
+            self.code = code
+            self.ent = ent
+            self.subst = subst
+        else:
+            if xml_element.tag != "map":
+                raise IncorrectTagError(
+                    found_element=xml_element.tag, expected_element="map"
                 )
+            if len(xml_element):
+                raise ExtraChildrenError(element=xml_element)
+            if xml_element.text is not None and not match(
+                r"^[\n\s]+$", xml_element.text, flags=MULTILINE
+            ):
+                raise ExtraTextError(element=xml_element)
+            self.unicode = (
+                unicode if unicode is not None else xml_element.get("unicode")
+            )
+            self.code = code if code is not None else xml_element.get("code")
+            self.ent = ent if ent is not None else xml_element.get("ent")
+            self.subst = subst if subst is not None else xml_element.get("subst")
 
     def export(self) -> Element:
-        xml_element: Element = Element("map")
-        for attr, val in vars(self).items():
-            if val is None:
-                continue
-            xml_element.set(attr, val)
-        return xml_element
+        element: Element = Element("map")
+        for key, val in vars(self).items():
+            match key:
+                case _ if val is None:
+                    continue
+                case _ if not isinstance(val, str):
+                    raise TypeError(f"attribute {key} must be a string not {type(val)}")
+                case _:
+                    element.set(key, val)
+        return element
 
 
 class Ut(TmxTag):
@@ -1266,5 +1282,8 @@ class Tmx(TmxTag):
         return element
 
 
-a = Header(xml_element=parse("a.tmx").getroot()).export()
-print(tostring(a))
+elem = parse("a.tmx").getroot()
+head = Header(xml_element=elem)
+head_elem = head.export()
+exp_tree = ElementTree(head_elem)
+exp_tree.write("b.tmx", encoding="utf-8")
