@@ -3,7 +3,7 @@ from csv import reader
 from io import TextIOWrapper
 from xml.etree.ElementTree import ElementTree, parse
 
-from classes import Header, Seg, Tmx, Tu, Tuv
+from PythonTmx.inline import Header, Seg, Tmx, Tu, Tuv
 
 __all__ = ["load_tmx_file", "load_csv_file", "write_to_tmx_file"]
 
