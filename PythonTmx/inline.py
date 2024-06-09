@@ -70,8 +70,9 @@ class Ut:
                     case Sub():
                         element.append(elem.export())
                     case _:
-                        raise TypeError(
-                            f"Expected a string or a Sub object but found {type(elem)}"
+                        raise IncorrectTagError(
+                            expected_element="sub",
+                            found_element=elem,
                         )
         return element
 
@@ -163,8 +164,9 @@ class Sub:
                     case Bpt() | Ept() | Ph() | Hi() | It():
                         element.append(elem.export())
                     case _:
-                        raise TypeError(
-                            f"Expected a string or a Sub object but found {type(elem)}"
+                        raise IncorrectTagError(
+                            expected_element="sub",
+                            found_element=elem,
                         )
         return element
 
@@ -246,8 +248,9 @@ class Bpt:
                     case Sub():
                         element.append(elem.export())
                     case _:
-                        raise TypeError(
-                            f"Expected a string or a Sub object but found {type(elem)}"
+                        raise IncorrectTagError(
+                            expected_element="sub",
+                            found_element=elem,
                         )
         return element
 
@@ -313,8 +316,9 @@ class Ept:
                     case Sub():
                         element.append(elem.export())
                     case _:
-                        raise TypeError(
-                            f"Expected a string or a Sub object but found {type(elem)}"
+                        raise IncorrectTagError(
+                            expected_element="sub",
+                            found_element=elem,
                         )
         return element
 
@@ -396,8 +400,9 @@ class It:
                     case Sub():
                         element.append(elem.export())
                     case _:
-                        raise TypeError(
-                            f"Expected a string or a Sub object but found {type(elem)}"
+                        raise IncorrectTagError(
+                            expected_element="sub",
+                            found_element=elem,
                         )
         return element
 
@@ -477,8 +482,9 @@ class Ph:
                     case Sub():
                         element.append(elem.export())
                     case _:
-                        raise TypeError(
-                            f"Expected a string or a Sub object but found {type(elem)}"
+                        raise IncorrectTagError(
+                            expected_element="sub",
+                            found_element=elem,
                         )
         return element
 
@@ -566,8 +572,9 @@ class Hi:
                     case Bpt() | Ept() | Ph() | Hi() | It():
                         element.append(elem.export())
                     case _:
-                        raise TypeError(
-                            f"Expected a string or a Sub object but found {type(elem)}"
+                        raise IncorrectTagError(
+                            expected_element="bpt, ept, ph, hi or it",
+                            found_element=elem,
                         )
         return element
 
@@ -617,8 +624,8 @@ class Seg:
                                 self.content += child.tail
                         case _:
                             raise IncorrectTagError(
-                                found_element=child,
                                 expected_element="bpt, ept, ph, hi or it",
+                                found_element=child,
                             )
 
     def export(self) -> Element:
