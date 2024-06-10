@@ -1,6 +1,11 @@
 from xml.etree.ElementTree import Element
 
 
+class TmxParseError(Exception):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
+
 class IncorrectTagError(Exception):
     def __init__(self, found_element: Element, expected_element: str) -> None:
         super().__init__(

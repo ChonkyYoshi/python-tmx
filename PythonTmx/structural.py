@@ -20,6 +20,7 @@ class Header:
         xml_element: Element | None = None,
         notes: Iterable[Note] | None = None,
         props: Iterable[Prop] | None = None,
+        udes: Iterable[Ude] | None = None,
         creationtool: str | None = None,
         creationtoolversion: str | None = None,
         segtype: Literal["block", "paragraph", "sentence", "phrase"] | None = None,
@@ -32,11 +33,11 @@ class Header:
         creationid: str | None = None,
         changedate: datetime | str | None = None,
         changeid: str | None = None,
-        udes: Iterable[Ude] | None = None,
     ) -> None:
         if not isinstance(xml_element, Element):
             self.notes = notes
             self.props = props
+            self.udes = udes
             self.creationtool = creationtool
             self.creationtoolversion = creationtoolversion
             self.segtype = segtype
@@ -49,7 +50,6 @@ class Header:
             self.creationid = creationid
             self.changedate = changedate
             self.changeid = changeid
-            self.udes = udes
         else:
             if xml_element.tag != "header":
                 raise IncorrectTagError(
@@ -59,10 +59,21 @@ class Header:
                 r"^[\n\s]+$", xml_element.text, flags=MULTILINE
             ):
                 raise ExtraTextError(element=xml_element)
-            if len(xml_element):
-                self.props = [Prop(prop) for prop in xml_element if prop.tag == "prop"]
-                self.notes = [Note(note) for note in xml_element if note.tag == "note"]
-                self.udes = [Ude(ude) for ude in xml_element if ude.tag == "ude"]
+            self.props = (
+                props
+                if props is not None
+                else [Prop(prop) for prop in xml_element if prop.tag == "prop"]
+            )
+            self.notes = (
+                notes
+                if notes is not None
+                else [Note(note) for note in xml_element if note.tag == "note"]
+            )
+            self.udes = (
+                udes
+                if udes is not None
+                else [Ude(ude) for ude in xml_element if ude.tag == "ude"]
+            )
             self.creationtool = (
                 creationtool
                 if creationtool is not None
@@ -689,10 +700,22 @@ class Tu:
                 r"^[\n\s]+$", xml_element.text, flags=MULTILINE
             ):
                 raise ExtraTextError(element=xml_element)
-            if len(xml_element):
-                self.tuvs = [Tuv(tuv) for tuv in xml_element if tuv.tag == "tuv"]
-                self.props = [Prop(prop) for prop in xml_element if prop.tag == "prop"]
-                self.notes = [Note(note) for note in xml_element if note.tag == "note"]
+
+            self.tuvs = (
+                tuvs
+                if tuvs is not None
+                else [Tuv(tuv) for tuv in xml_element if tuv.tag == "tuv"]
+            )
+            self.props = (
+                props
+                if props is not None
+                else [Prop(prop) for prop in xml_element if prop.tag == "prop"]
+            )
+            self.notes = (
+                notes
+                if notes is not None
+                else [Note(note) for note in xml_element if note.tag == "note"]
+            )
             if tuid is not None:
                 self.tuid = tuid
             else:
@@ -861,8 +884,9 @@ class Tmx:
                 if header is not None
                 else Header(xml_element=xml_element.find("header"))
             )
-            if len(xml_element):
-                self.tus = [Tu(tu) for tu in xml_element.iter("tu")]
+            self.tus = (
+                tus if tus is not None else [Tu(tu) for tu in xml_element.iter("tu")]
+            )
 
     def export(self) -> Element:
         element: Element = Element("tmx", version="1.4")
