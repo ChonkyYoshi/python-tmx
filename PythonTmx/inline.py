@@ -24,7 +24,7 @@ class Ut:
             self.x = x if x is not None else xml_element.get("x")
             try:
                 self.x = int(self.x)
-            except ValueError:
+            except (ValueError, TypeError):
                 pass
             if content is not None:
                 self.content = content
@@ -190,12 +190,12 @@ class Bpt:
             self.x = x if x is not None else xml_element.get("x")
             try:
                 self.x = int(self.x)
-            except ValueError:
+            except (ValueError, TypeError):
                 pass
             self.i = i if i is not None else xml_element.get("i")
             try:
                 self.i = int(self.i)
-            except ValueError:
+            except (ValueError, TypeError):
                 pass
             self.type_ = type_ if type_ is not None else xml_element.get("type_")
             if content is not None:
@@ -270,7 +270,7 @@ class Ept:
             self.i = i if i is not None else xml_element.get("i")
             try:
                 self.i = int(self.i)
-            except ValueError:
+            except (ValueError, TypeError):
                 pass
             if content is not None:
                 self.content = content
@@ -344,7 +344,7 @@ class It:
             self.type_ = type_ if type_ is not None else xml_element.get("type_")
             try:
                 self.x = int(self.x)
-            except ValueError:
+            except (ValueError, TypeError):
                 pass
             if content is not None:
                 self.content = content
@@ -428,7 +428,7 @@ class Ph:
             self.type_ = type_ if type_ is not None else xml_element.get("type_")
             try:
                 self.x = int(self.x)
-            except ValueError:
+            except (ValueError, TypeError):
                 pass
             if content is not None:
                 self.content = content
@@ -507,7 +507,7 @@ class Hi:
             self.type_ = type_ if type_ is not None else xml_element.get("type")
             try:
                 self.x = int(self.x)
-            except ValueError:
+            except (ValueError, TypeError):
                 pass
             if content is not None:
                 self.content = content
