@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Iterable, Literal
 from xml.etree.ElementTree import Element
 
-from PythonTmx.errors import IncorrectTagError, MissingRequiredAttributeError
+from errors import IncorrectTagError, MissingRequiredAttributeError
 
 
 class Ut:

@@ -5,13 +5,13 @@ from re import MULTILINE, match
 from typing import Iterable, Literal
 from xml.etree.ElementTree import Element
 
-from PythonTmx.errors import (
+from errors import (
     ExtraChildrenError,
     ExtraTextError,
     IncorrectTagError,
     MissingRequiredAttributeError,
 )
-from PythonTmx.inline import Bpt, Ept, Hi, It, Ph
+from inline import Bpt, Ept, Hi, It, Ph
 
 
 class Header:
