@@ -1,11 +1,13 @@
-from time import perf_counter
-from xml.etree.ElementTree import Element, XMLPullParser, parse, tostring
+from csv import reader
+from datetime import UTC, datetime
+from typing import Iterable, Tuple
+from xml.etree.ElementTree import Element, XMLPullParser, parse
 
 from errors import TmxParseError
 from structural import Header, Map, Note, Prop, Seg, Tmx, Tu, Tuv, Ude
 
 
-def load_tmx_file(file: str) -> Tmx:
+def load_huge_tmx_file(file: str) -> Tmx:
     event: str
     elem: Element
     tmx = Tmx(tus=[])
@@ -65,32 +67,55 @@ def load_tmx_file(file: str) -> Tmx:
     return tmx
 
 
-def make_big_file(name: str) -> None:
-    b = tostring(
-        Tu(
-            tuvs=[
-                Tuv(lang="en-us", segment=Seg(content="en content")),
-                Tuv(lang="fr-fr", segment=Seg(content="fr content")),
-            ],
-            srclang="en-us",
-        ).export(),
-        encoding="unicode",
+def load_tmx_file(file: str) -> Tmx:
+    return Tmx(parse(file).getroot())
+
+
+def load_csv_file(
+    file: str,
+    source: Tuple[int, str],
+    target: Tuple[int, str] | Iterable[Tuple[int, str]],
+    skip_csv_header: bool = True,
+    encoding: str | None = "utf-8",
+    header: Header | None = None,
+    csv_options: dict[str | str] | None = None,
+) -> Tmx:
+    default_header = Header(
+        creationtool="PythonTMX",
+        creationtoolversion="0.4",
+        segtype="paragraph",
+        o_tmf="csv",
+        adminlang="en-us",
+        srclang="en-us",
+        datatype="Plain text",
+        creationdate=datetime.now(UTC),
+        creationid="PythonTmx",
+        o_encoding="utf-8",
     )
-    with open(name, "a", encoding="utf-8") as f:
-        f.write(
-            """<?xml version="1.0"?><tmx version="1.4"><header creationtool="XYZTool" creationtoolversion="1.01-023" datatype="PlainText" segtype="sentence" adminlang="en-us" srclang="EN" o-tmf="ABCTransMem" creationdate="20020101T163812Z" creationid="ThomasJ" changedate="20020413T023401Z" changeid="Amity" o-encoding="iso-8859-1"></header><body>"""
+    tmx = Tmx(header=header) if header is not None else Tmx(header=default_header)
+    with open(file, "r", encoding=encoding) as f:
+        if csv_options is not None:
+            csv_reader = reader(f, **csv_options)
+        else:
+            csv_reader = reader(f)
+        if skip_csv_header:
+            csv_reader.__next__()
+        tmx.tus.extend(
+            [
+                Tu(
+                    srclang=source[1],
+                    tuvs=[
+                        Tuv(lang=source[1], segment=Seg(content=row[source[0]])),
+                        *[
+                            Tuv(
+                                lang=child_target[1],
+                                segment=Seg(content=row[child_target[0]]),
+                            )
+                            for child_target in target
+                        ],
+                    ],
+                )
+                for row in csv_reader
+            ]
         )
-        for i in range(1_000_000):
-            f.write(b)
-            f.flush()
-        f.write("</body></tmx>")
-    print("done creating big file")
-
-
-# make_big_file("b.tmx")
-e = perf_counter()
-a = load_tmx_file("b.tmx")
-print(perf_counter() - e)
-e = perf_counter()
-a = Tmx(parse("b.tmx").getroot())
-print(perf_counter() - e)
+    return tmx

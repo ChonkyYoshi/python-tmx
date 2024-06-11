@@ -18,9 +18,9 @@ class Header:
     def __init__(
         self,
         xml_element: Element | None = None,
-        notes: Iterable[Note] | None = None,
-        props: Iterable[Prop] | None = None,
-        udes: Iterable[Ude] | None = None,
+        notes: Iterable[Note] | None = [],
+        props: Iterable[Prop] | None = [],
+        udes: Iterable[Ude] | None = [],
         creationtool: str | None = None,
         creationtoolversion: str | None = None,
         segtype: Literal["block", "paragraph", "sentence", "phrase"] | None = None,
@@ -315,7 +315,7 @@ class Ude:
     def __init__(
         self,
         xml_element: Element | None = None,
-        maps: Iterable[Map] | None = None,
+        maps: Iterable[Map] | None = [],
         name: str | None = None,
         base: str | None = None,
     ) -> None:
@@ -361,7 +361,7 @@ class Map:
     def __init__(
         self,
         xml_element: Element | None = None,
-        unicode: Iterable[Map] | None = None,
+        unicode: str | None = None,
         code: str | None = None,
         ent: str | None = None,
         subst: str | None = None,
@@ -410,7 +410,7 @@ class Seg:
     def __init__(
         self,
         xml_element: Element | None = None,
-        content: Iterable[str | Bpt | Ept | It | Ph | Hi] | str | None = None,
+        content: Iterable[str | Bpt | Ept | It | Ph | Hi] | str | None = [],
     ) -> None:
         if not isinstance(xml_element, Element):
             self.content = content
@@ -482,8 +482,8 @@ class Tuv:
     def __init__(
         self,
         xml_element: Element | None = None,
-        notes: Iterable[Note] | None = None,
-        props: Iterable[Prop] | None = None,
+        notes: Iterable[Note] | None = [],
+        props: Iterable[Prop] | None = [],
         segment: Seg | None = None,
         lang: str | None = None,
         o_encoding: str | None = None,
@@ -656,9 +656,9 @@ class Tu:
     def __init__(
         self,
         xml_element: Element | None = None,
-        notes: Iterable[Note] | None = None,
-        props: Iterable[Prop] | None = None,
-        tuvs: Iterable[Tuv] | None = None,
+        notes: Iterable[Note] | None = [],
+        props: Iterable[Prop] | None = [],
+        tuvs: Iterable[Tuv] | None = [],
         tuid: int | None = None,
         o_encoding: str | None = None,
         datatype: str | None = None,
@@ -691,6 +691,7 @@ class Tu:
             self.segtype = segtype
             self.changeid = changeid
             self.o_tmf = o_tmf
+            self.srclang = srclang
         else:
             if xml_element.tag != "tu":
                 raise IncorrectTagError(
@@ -865,7 +866,7 @@ class Tmx:
         self,
         xml_element: Element | None = None,
         header: Header | None = None,
-        tus: Iterable[Tu] | None = None,
+        tus: Iterable[Tu] | None = [],
     ) -> None:
         if not isinstance(xml_element, Element):
             self.header = header
