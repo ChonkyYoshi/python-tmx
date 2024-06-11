@@ -1,5 +1,13 @@
 from xml.etree.ElementTree import Element
 
+__all__ = [
+    "TmxParseError",
+    "IncorrectTagError",
+    "ExtraChildrenError",
+    "ExtraTextError",
+    "MissingRequiredAttributeError",
+]
+
 
 class TmxParseError(Exception):
     def __init__(self, *args: object) -> None:

@@ -13,6 +13,8 @@ from errors import (
 )
 from inline import Bpt, Ept, Hi, It, Ph
 
+__all__ = ["Header", "Map", "Note", "Prop", "Seg", "Tmx", "Tu", "Tuv", "Ude"]
+
 
 class Header:
     def __init__(

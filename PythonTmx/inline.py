@@ -5,6 +5,8 @@ from xml.etree.ElementTree import Element
 
 from errors import IncorrectTagError, MissingRequiredAttributeError
 
+__all__ = ["Bpt", "Ept", "Hi", "It", "Ph", "Ut", "Sub"]
+
 
 class Ut:
     def __init__(
