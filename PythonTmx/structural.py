@@ -17,6 +17,39 @@ __all__ = ["Header", "Map", "Note", "Prop", "Seg", "Tmx", "Tu", "Tuv", "Ude"]
 
 
 class Header:
+    """Represents the header of a tmx file.
+
+    Args:
+        xml_element (Element | None): an XML element to create the Header object from. Defaults to None.
+        creationtool (str | None): The tool used to create the tmx file.
+        creationtoolversion (str | None): The version of the creation tool.
+        segtype (Literal["block", "paragraph", "sentence", "phrase"] | None): The segmentation type.
+        o_tmf (str | None): The original format of the TM.
+        adminlang (str | None): The administrative language.
+        srclang (str | None): The source language.
+        datatype (str | None): The data type.
+        notes (Iterable[Note] | None): A list of notes objects. Defaults to an empty list.
+        props (Iterable[Prop] | None): A list of props objects. Defaults to an empty list.
+        udes (Iterable[Ude] | None): A list of ude objects. Defaults to an empty list.
+        o_encoding (str | None): The original encoding of the file. Defaults to None.
+        creationdate (datetime | str | None): The creation date of the header. Defaults to None.
+        creationid (str | None): The ID of the creator. Defaults to None.
+        changedate (datetime | str | None): The date the header was last changed. Defaults to None.
+        changeid (str | None): The ID of the person who last changed the header. Defaults to None.
+
+    Raises:
+        IncorrectTagError: If the provided XML element does not have the tag 'header'.
+        ExtraTextError: If the provided XML element has non-whitespace text.
+
+    Notes:
+        If both an XML element and values for specific attributes are provided,
+        the user-provided values will override the ones derived from the XML element.\n
+        If given as a string, `creationdate` and `changedate` will try to be converted
+        to a datetime object if they match the pattern "YYYYMMDDTHHMMSSZ".\n
+        Not providing a required attribute will not prevent the creation of the object,
+        but will prevent its export until the attribute is set.
+    """
+
     def __init__(
         self,
         xml_element: Element | None = None,
@@ -130,6 +163,26 @@ class Header:
             )
 
     def export(self) -> Element:
+        """Export the object to an Element.
+
+        Returns:
+            Element: An XML element representing the object.
+
+        Raises:
+            TypeError: If an attribute contains an unsupported type.
+            MissingRequiredAttributeError: If a required attribute is missing.
+            ValueError: If an attribute has an invalid value.
+
+        Notes:
+            Required attributes are:
+                * `creationtool`
+                * `creationtoolversion`
+                * `segtype`
+                * `o_tmf`
+                * `adminlang`
+                * `srclang`
+                * `datatype`
+        """
         element: Element = Element("header")
         for key, val in vars(self).items():
             match key, val:
@@ -898,3 +951,6 @@ class Tmx:
         body.extend([tu.export() for tu in self.tus])
         element.append(body)
         return element
+
+
+Header()
