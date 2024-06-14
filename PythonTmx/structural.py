@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from datetime import datetime
 from typing import Iterable, Literal
 
@@ -11,6 +9,159 @@ from inline import Bpt, Ept, Hi, It, Ph
 from lxml.etree import Element, SubElement, _Element
 
 __all__ = ["Header", "Map", "Note", "Prop", "Seg", "Tmx", "Tu", "Tuv", "Ude"]
+
+
+class Prop:
+    def __init__(
+        self,
+        xml_element: _Element | None = None,
+        text: str | None = None,
+        type_: str | None = None,
+        lang: str | None = None,
+        o_encoding: str | None = None,
+    ) -> None:
+        if xml_element is not None:
+            if xml_element.tag != "prop":
+                raise IncorrectTagError(xml_element, "prop")
+            self.type_ = type_ if type_ else xml_element.get("type")
+            self.o_encoding = (
+                o_encoding if o_encoding else xml_element.get("o-encoding")
+            )
+            self.lang = (
+                lang
+                if lang
+                else xml_element.get("{http://www.w3.org/XML/1998/namespace}lang")
+            )
+            self.text = text if text else xml_element.text
+        else:
+            self.o_encoding = o_encoding
+            self.type_ = type_
+            self.lang = lang
+            self.text = text
+
+    def export(self) -> _Element:
+        elem: _Element = Element(
+            "prop",
+        )
+        elem.text = self.text
+        if self.lang:
+            elem.set("{http://www.w3.org/XML/1998/namespace}lang", self.lang)
+        if self.type_:
+            elem.set("type", self.type_)
+        if self.o_encoding:
+            elem.set("o-encoding", self.o_encoding)
+        return elem
+
+
+class Note:
+    def __init__(
+        self,
+        xml_element: _Element | None = None,
+        text: str | None = None,
+        lang: str | None = None,
+        o_encoding: str | None = None,
+    ) -> None:
+        if xml_element is not None:
+            if xml_element.tag != "note":
+                raise IncorrectTagError(xml_element, "note")
+            self.o_encoding = (
+                o_encoding if o_encoding else xml_element.get("o-encoding")
+            )
+            self.lang = (
+                lang
+                if lang
+                else xml_element.get("{http://www.w3.org/XML/1998/namespace}lang")
+            )
+            self.text = text if text else xml_element.text
+        else:
+            self.o_encoding = o_encoding
+            self.lang = lang
+            self.text = text
+
+    def export(self) -> _Element:
+        elem: _Element = Element(
+            "note",
+        )
+        elem.text = self.text
+        if self.lang:
+            elem.set("{http://www.w3.org/XML/1998/namespace}lang", self.lang)
+        if self.o_encoding:
+            elem.set("o-encoding", self.o_encoding)
+        return elem
+
+
+class Map:
+    def __init__(
+        self,
+        xml_element: _Element | None = None,
+        unicode: str | None = None,
+        code: str | None = None,
+        ent: str | None = None,
+        subst: str | None = None,
+    ) -> None:
+        if xml_element is not None:
+            if xml_element.tag != "map":
+                raise IncorrectTagError(xml_element, "map")
+            self.unicode = unicode if unicode else xml_element.get("unicode")
+            self.code = code if code else xml_element.get("code")
+            self.ent = ent if ent else xml_element.get("ent")
+            self.subst = subst if subst else xml_element.get("subst")
+        else:
+            self.unicode = unicode
+            self.code = code
+            self.ent = ent
+            self.subst = subst
+
+    def export(self) -> _Element:
+        elem: _Element = Element("map")
+        if self.unicode:
+            elem.set("unicode", self.unicode)
+        if self.code:
+            elem.set("code", self.code)
+        if self.ent:
+            elem.set("ent", self.ent)
+        if self.subst:
+            elem.set("subst", self.subst)
+        return elem
+
+
+class Ude:
+    def __init__(
+        self,
+        xml_element: _Element | None = None,
+        maps: Iterable[Map] | None = [],
+        name: str | None = None,
+        base: str | None = None,
+    ) -> None:
+        if xml_element is not None:
+            if xml_element.tag != "ude":
+                raise IncorrectTagError(xml_element, "ude")
+            self.base = base if base else xml_element.get("base")
+            self.name = name if name else xml_element.get("name")
+            self.maps = (
+                maps
+                if maps
+                else [Map(map_) for map_ in xml_element if map_.tag == "map"]
+            )
+        else:
+            self.base = base
+            self.name = name
+            self.maps = maps
+
+    def export(self) -> _Element:
+        elem: _Element = Element("ude")
+        if self.maps and not self.base:
+            for map_ in self.maps:
+                if map_.code:
+                    raise MissingRequiredAttributeError(elem, "base")
+                elem.append(map_.export())
+            return elem
+        elem.extend([map_.export() for map_ in self.maps])
+        if self.base:
+            elem.set("base", self.base)
+        if self.name:
+            elem.set("name", self.name)
+        return elem
 
 
 class Header:
@@ -151,159 +302,6 @@ class Header:
         elem.extend([note.export() for note in self.notes])
         elem.extend([prop.export() for prop in self.props])
         elem.extend([ude.export() for ude in self.udes])
-        return elem
-
-
-class Prop:
-    def __init__(
-        self,
-        xml_element: _Element | None = None,
-        text: str | None = None,
-        type_: str | None = None,
-        lang: str | None = None,
-        o_encoding: str | None = None,
-    ) -> None:
-        if xml_element is not None:
-            if xml_element.tag != "prop":
-                raise IncorrectTagError(xml_element, "prop")
-            self.type_ = type_ if type_ else xml_element.get("type")
-            self.o_encoding = (
-                o_encoding if o_encoding else xml_element.get("o-encoding")
-            )
-            self.lang = (
-                lang
-                if lang
-                else xml_element.get("{http://www.w3.org/XML/1998/namespace}lang")
-            )
-            self.text = text if text else xml_element.text
-        else:
-            self.o_encoding = o_encoding
-            self.type_ = type_
-            self.lang = lang
-            self.text = text
-
-    def export(self) -> _Element:
-        elem: _Element = Element(
-            "prop",
-        )
-        elem.text = self.text
-        if self.lang:
-            elem.set("{http://www.w3.org/XML/1998/namespace}lang", self.lang)
-        if self.type_:
-            elem.set("type", self.type_)
-        if self.o_encoding:
-            elem.set("o-encoding", self.o_encoding)
-        return elem
-
-
-class Note:
-    def __init__(
-        self,
-        xml_element: _Element | None = None,
-        text: str | None = None,
-        lang: str | None = None,
-        o_encoding: str | None = None,
-    ) -> None:
-        if xml_element is not None:
-            if xml_element.tag != "note":
-                raise IncorrectTagError(xml_element, "note")
-            self.o_encoding = (
-                o_encoding if o_encoding else xml_element.get("o-encoding")
-            )
-            self.lang = (
-                lang
-                if lang
-                else xml_element.get("{http://www.w3.org/XML/1998/namespace}lang")
-            )
-            self.text = text if text else xml_element.text
-        else:
-            self.o_encoding = o_encoding
-            self.lang = lang
-            self.text = text
-
-    def export(self) -> _Element:
-        elem: _Element = Element(
-            "note",
-        )
-        elem.text = self.text
-        if self.lang:
-            elem.set("{http://www.w3.org/XML/1998/namespace}lang", self.lang)
-        if self.o_encoding:
-            elem.set("o-encoding", self.o_encoding)
-        return elem
-
-
-class Ude:
-    def __init__(
-        self,
-        xml_element: _Element | None = None,
-        maps: Iterable[Map] | None = [],
-        name: str | None = None,
-        base: str | None = None,
-    ) -> None:
-        if xml_element is not None:
-            if xml_element.tag != "ude":
-                raise IncorrectTagError(xml_element, "ude")
-            self.base = base if base else xml_element.get("base")
-            self.name = name if name else xml_element.get("name")
-            self.maps = (
-                maps
-                if maps
-                else [Map(map_) for map_ in xml_element if map_.tag == "map"]
-            )
-        else:
-            self.base = base
-            self.name = name
-            self.maps = maps
-
-    def export(self) -> _Element:
-        elem: _Element = Element("ude")
-        if self.maps and not self.base:
-            for map_ in self.maps:
-                if map_.code:
-                    raise MissingRequiredAttributeError(elem, "base")
-                elem.append(map_.export())
-            return elem
-        elem.extend([map_.export() for map_ in self.maps])
-        if self.base:
-            elem.set("base", self.base)
-        if self.name:
-            elem.set("name", self.name)
-        return elem
-
-
-class Map:
-    def __init__(
-        self,
-        xml_element: _Element | None = None,
-        unicode: str | None = None,
-        code: str | None = None,
-        ent: str | None = None,
-        subst: str | None = None,
-    ) -> None:
-        if xml_element is not None:
-            if xml_element.tag != "map":
-                raise IncorrectTagError(xml_element, "map")
-            self.unicode = unicode if unicode else xml_element.get("unicode")
-            self.code = code if code else xml_element.get("code")
-            self.ent = ent if ent else xml_element.get("ent")
-            self.subst = subst if subst else xml_element.get("subst")
-        else:
-            self.unicode = unicode
-            self.code = code
-            self.ent = ent
-            self.subst = subst
-
-    def export(self) -> _Element:
-        elem: _Element = Element("map")
-        if self.unicode:
-            elem.set("unicode", self.unicode)
-        if self.code:
-            elem.set("code", self.code)
-        if self.ent:
-            elem.set("ent", self.ent)
-        if self.subst:
-            elem.set("subst", self.subst)
         return elem
 
 
