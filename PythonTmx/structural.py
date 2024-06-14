@@ -532,7 +532,7 @@ class Tu:
         creationdate: datetime | str | None = None,
         creationid: str | None = None,
         changedate: datetime | str | None = None,
-        segtype: Literal["block", "paragraph" | "sentence" | "phrase"] | None = None,
+        segtype: Literal["block", "paragraph", "sentence", "phrase"] | None = None,
         changeid: str | None = None,
         o_tmf: str | None = None,
         srclang: str | None = None,
