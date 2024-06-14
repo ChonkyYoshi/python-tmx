@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime
-from re import MULTILINE, match
 from typing import Any, Iterable, Literal
+from xml.etree.ElementTree import SubElement
 
 from errors import (
-    ExtraTextError,
     IncorrectTagError,
     MissingRequiredAttributeError,
 )
 from inline import Bpt, Ept, Hi, It, Ph
-from lxml.etree import Element, XMLParser, _Element, parse
+from lxml.etree import Element, _Element
 
 __all__ = ["Header", "Map", "Note", "Prop", "Seg", "Tmx", "Tu", "Tuv", "Ude"]
 
@@ -51,6 +50,8 @@ class Header:
         changeid: str | None = None,
     ) -> None:
         if xml_element is not None:
+            if xml_element.tag != "header":
+                raise IncorrectTagError(xml_element, "header")
             for attr in self.__attrib:
                 val = xml_element.get(attr)
                 match attr:
@@ -74,22 +75,10 @@ class Header:
                         self.o_encoding = o_encoding if o_encoding else val
                     case "creationdate":
                         self.creationdate = creationdate if creationdate else val
-                        try:
-                            self.creationdate = datetime.strptime(
-                                self.creationdate, r"%Y%m%dT%H%M%SZ"
-                            )
-                        except (ValueError, TypeError):
-                            pass
                     case "creationid":
                         self.creationid = creationid if creationid else val
                     case "changedate":
                         self.changedate = changedate if changedate else val
-                        try:
-                            self.changedate = datetime.strptime(
-                                self.changedate, r"%Y%m%dT%H%M%SZ"
-                            )
-                        except (ValueError, TypeError):
-                            pass
                     case "changeid":
                         self.changeid = changeid if changeid else val
             self.notes = (
@@ -121,6 +110,14 @@ class Header:
             self.creationid = creationid
             self.changedate = changedate
             self.changeid = changeid
+        try:
+            self.creationdate = datetime.strptime(self.creationdate, r"%Y%m%dT%H%M%SZ")
+        except (ValueError, TypeError):
+            pass
+        try:
+            self.changedate = datetime.strptime(self.changedate, r"%Y%m%dT%H%M%SZ")
+        except (ValueError, TypeError):
+            pass
 
     def __setattr__(self, name: str, value: Any) -> None:
         _name = name.replace("_", "-")
@@ -157,6 +154,8 @@ class Prop:
         o_encoding: str | None = None,
     ) -> None:
         if xml_element is not None:
+            if xml_element.tag != "prop":
+                raise IncorrectTagError(xml_element, "prop")
             self.type_ = type_ if type_ else xml_element.get("type")
             self.o_encoding = (
                 o_encoding if o_encoding else xml_element.get("o-encoding")
@@ -206,6 +205,8 @@ class Note:
         o_encoding: str | None = None,
     ) -> None:
         if xml_element is not None:
+            if xml_element.tag != "note":
+                raise IncorrectTagError(xml_element, "note")
             self.o_encoding = (
                 o_encoding if o_encoding else xml_element.get("o-encoding")
             )
@@ -248,6 +249,8 @@ class Ude:
         base: str | None = None,
     ) -> None:
         if xml_element is not None:
+            if xml_element.tag != "ude":
+                raise IncorrectTagError(xml_element, "ude")
             self.base = base if base else xml_element.get("base")
             self.name = name if name else xml_element.get("name")
             self.maps = (
@@ -292,6 +295,8 @@ class Map:
         subst: str | None = None,
     ) -> None:
         if xml_element is not None:
+            if xml_element.tag != "map":
+                raise IncorrectTagError(xml_element, "map")
             self.unicode = unicode if unicode else xml_element.get("unicode")
             self.code = code if code else xml_element.get("code")
             self.ent = ent if ent else xml_element.get("ent")
@@ -317,10 +322,10 @@ class Map:
 class Seg:
     def __init__(
         self,
-        xml_element: Element | None = None,
+        xml_element: _Element | None = None,
         content: Iterable[str | Bpt | Ept | It | Ph | Hi] | str | None = [],
     ) -> None:
-        if not isinstance(xml_element, Element):
+        if xml_element is None:
             self.content = content
         else:
             if xml_element.tag != "seg":
@@ -363,33 +368,48 @@ class Seg:
                                 found_element=child,
                             )
 
-    def export(self) -> Element:
-        element: Element = Element("seg")
+    def export(self) -> _Element:
+        element: _Element = Element("seg")
         if isinstance(self.content, str):
             element.text = self.content
         else:
-            for elem in self.content:
-                match elem:
+            for child in self.content:
+                match child:
                     case str() if element.text is None:
-                        element.text = elem
+                        element.text = child
                     case str() if not len(element):
-                        element.text += elem
+                        element.text += child
                     case str():
-                        element[-1].tail = elem
+                        element[-1].tail = child
                     case Bpt() | Ept() | Ph() | Hi() | It():
-                        element.insert(0, elem.export())
+                        element.append(child.export())
                     case _:
                         raise IncorrectTagError(
                             expected_element="bpt, ept, ph, hi or it",
-                            found_element=elem,
+                            found_element=child,
                         )
         return element
 
 
 class Tuv:
+    __attrib = {
+        "{http://www.w3.org/XML/1998/namespace}lang": None,
+        "o-encoding": None,
+        "datatype": None,
+        "usagecount": None,
+        "lastusagedate": None,
+        "creationtool": None,
+        "creationtoolversion": None,
+        "creationdate": None,
+        "creationid": None,
+        "changedate": None,
+        "changeid": None,
+        "o-tmf": None,
+    }
+
     def __init__(
         self,
-        xml_element: Element | None = None,
+        xml_element: _Element | None = None,
         notes: Iterable[Note] | None = [],
         props: Iterable[Prop] | None = [],
         segment: Seg | None = None,
@@ -406,7 +426,56 @@ class Tuv:
         changeid: str | None = None,
         o_tmf: str | None = None,
     ) -> None:
-        if not isinstance(xml_element, Element):
+        if xml_element is not None:
+            if xml_element.tag != "tuv":
+                raise IncorrectTagError(xml_element, "tuv")
+            for attr in self.__attrib:
+                val = xml_element.get(attr)
+                match attr:
+                    case "{http://www.w3.org/XML/1998/namespace}lang":
+                        self.lang = (
+                            lang
+                            if lang
+                            else xml_element.get(
+                                "{http://www.w3.org/XML/1998/namespace}lang"
+                            )
+                        )
+                    case "o-encoding":
+                        self.o_encoding = o_encoding if o_encoding else val
+                    case "datatype":
+                        self.datatype = datatype if datatype else val
+                    case "usagecount":
+                        self.usagecount = usagecount if usagecount else val
+                    case "lastusagedate":
+                        self.lastusagedate = lastusagedate if lastusagedate else val
+                    case "creationtool":
+                        self.creationtool = creationtool if creationtool else val
+                    case "creationtoolversion":
+                        self.creationtoolversion = (
+                            creationtoolversion if creationtoolversion else val
+                        )
+                    case "creationdate":
+                        self.creationdate = creationdate if creationdate else val
+                    case "creationid":
+                        self.creationid = creationid if creationid else val
+                    case "changedate":
+                        self.changedate = changedate if changedate else val
+                    case "changeid":
+                        self.changeid = changeid if changeid else val
+                    case "o-tmf":
+                        self.o_tmf = o_tmf if o_tmf else val
+            self.notes = (
+                notes
+                if notes
+                else [Note(note) for note in xml_element if note.tag == "note"]
+            )
+            self.props = (
+                props
+                if props
+                else [Prop(prop) for prop in xml_element if prop.tag == "prop"]
+            )
+            self.segment = Seg(xml_element=xml_element.find("seg"))
+        else:
             self.notes = notes
             self.props = props
             self.segment = segment
@@ -421,149 +490,67 @@ class Tuv:
             self.creationid = creationid
             self.changedate = changedate
             self.changeid = changeid
-            self.o_tmf = o_tmf
-        else:
-            if xml_element.tag != "tuv":
-                raise IncorrectTagError(
-                    found_element=xml_element, expected_element="tuv"
-                )
-            if xml_element.text is not None and not match(
-                r"^[\n\s]+$", xml_element.text, flags=MULTILINE
-            ):
-                raise ExtraTextError(element=xml_element)
-            if len(xml_element):
-                self.segment = Seg(xml_element.find("seg"))
-                self.props = [Prop(prop) for prop in xml_element if prop.tag == "prop"]
-                self.notes = [Note(note) for note in xml_element if note.tag == "note"]
-            self.lang = (
-                lang
-                if lang is not None
-                else xml_element.attrib.get(
-                    "{http://www.w3.org/XML/1998/namespace}lang"
-                )
+        try:
+            self.usagecount = int(self.usagecount)
+        except (ValueError, TypeError):
+            pass
+        try:
+            self.creationdate = datetime.strptime(self.creationdate, r"%Y%m%dT%H%M%SZ")
+        except (ValueError, TypeError):
+            pass
+        try:
+            self.lastusagedate = datetime.strptime(
+                self.lastusagedate, r"%Y%m%dT%H%M%SZ"
             )
-            self.o_encoding = (
-                o_encoding
-                if o_encoding is not None
-                else xml_element.attrib.get("o-encoding")
-            )
-            self.datatype = (
-                datatype if datatype is not None else xml_element.attrib.get("datatype")
-            )
-            if usagecount is not None:
-                self.usagecount = usagecount
-            else:
-                try:
-                    self.usagecount = int(xml_element.get("usagecount"))
-                except (ValueError, TypeError):
-                    self.usagecount = xml_element.get("usagecount")
-            if lastusagedate is not None:
-                self.lastusagedate = lastusagedate
-            else:
-                try:
-                    self.lastusagedate = datetime.strptime(
-                        xml_element.get("lastusagedate"),
-                        r"%Y%m%dT%H%M%SZ",
-                    )
-                except TypeError:
-                    self.lastusagedate = xml_element.get("lastusagedate")
-            self.creationtool = (
-                creationtool
-                if creationtool is not None
-                else xml_element.attrib.get("creationtool")
-            )
-            self.creationtoolversion = (
-                creationtoolversion
-                if creationtoolversion is not None
-                else xml_element.get("creationtoolversion")
-            )
-            if creationdate is not None:
-                self.creationdate = creationdate
-            else:
-                try:
-                    self.creationdate = datetime.strptime(
-                        xml_element.get("creationdate"),
-                        r"%Y%m%dT%H%M%SZ",
-                    )
-                except TypeError:
-                    self.creationdate = xml_element.get("creationdate")
-            self.creationid = (
-                creationid if creationid is not None else xml_element.get("creationid")
-            )
-            if changedate is not None:
-                self.changedate = changedate
-            else:
-                try:
-                    self.changedate = datetime.strptime(
-                        xml_element.get("changedate"),
-                        r"%Y%m%dT%H%M%SZ",
-                    )
-                except (ValueError, TypeError):
-                    self.changedate = xml_element.get("changedate")
-            self.changeid = (
-                changeid if changeid is not None else xml_element.get("changeid")
-            )
+        except (ValueError, TypeError):
+            pass
+        try:
+            self.changedate = datetime.strptime(self.changedate, r"%Y%m%dT%H%M%SZ")
+        except (ValueError, TypeError):
+            pass
 
-    def export(self) -> Element:
-        element: Element = Element("tuv")
-        for key, val in vars(self).items():
-            match key, val:
-                case "segment", Seg():
-                    element.insert(0, val.export())
-                case "notes", _ if isinstance(val, Iterable):
-                    for note in val:
-                        if not isinstance(note, Note):
-                            raise TypeError(
-                                f"notes should only contain Note objects, not {type(note)}"
-                            )
-                        element.insert(0, note.export())
-                case "props", _ if isinstance(val, Iterable):
-                    for prop in val:
-                        if not isinstance(prop, Prop):
-                            raise TypeError(
-                                f"props should only contain Prop objects, not {type(prop)}"
-                            )
-                        element.insert(0, prop.export())
-                case "lang", None:
-                    raise MissingRequiredAttributeError(element=element, attribute=key)
-                case "lang", str():
-                    element.set("{http://www.w3.org/XML/1998/namespace}lang", val)
-                case (
-                    "datatype"
-                    | "creationtool"
-                    | "creationtoolversion"
-                    | "creationid"
-                    | "changeid",
-                    str(),
-                ):
-                    element.set(key, val)
-                case "o_tmf" | "o_encoding", str():
-                    key = key.replace("_", "-")
-                    element.set(key, val)
-                case "creationdate" | "changedate" | "lastusagedate", datetime():
-                    element.set(key, val.strftime(r"%Y%m%dT%H%M%SZ"))
-                case "creationdate" | "changedate" | "lastusagedate", str():
-                    val = val.upper()
-                    if not match(r"\d{8}T\d{6}Z", val):
-                        raise ValueError(
-                            f"attribute {key} is not formatted correctly. if using a string, value should be formatted as YYYYMMDDTHHMMSSZ."
-                        )
-                    element.set(key, val)
-                case "usagecount", str() | int():
-                    element.set(key, str(val))
-                case _, None:
-                    pass
-                case _, _:
-                    raise TypeError(
-                        f"cannot serialize attribute {key} with value {val}"
-                    )
-        return element
+    def __setattr__(self, name: str, value: Any) -> None:
+        _name = name.replace("_", "-")
+        if _name in self.__attrib.keys():
+            if isinstance(value, datetime):
+                self.__attrib[_name] = value.strftime(r"%Y%m%dT%H%M%SZ")
+            elif isinstance(value, int):
+                self.__attrib[_name] = str(value)
+            else:
+                self.__attrib[_name] = value
+        super().__setattr__(name, value)
+
+    def export(self) -> _Element:
+        elem: _Element = Element(
+            "header", {attr: val for attr, val in self.__attrib.items() if val}
+        )
+        elem.append(self.segment.export())
+        elem.extend([note.export() for note in self.notes])
+        elem.extend([prop.export() for prop in self.props])
+        return elem
 
 
 class Tu:
+    __attrib = {
+        "tuid": None,
+        "o-encoding": None,
+        "datatype": None,
+        "usagecount": None,
+        "lastusagedate": None,
+        "creationtool": None,
+        "creationtoolversion": None,
+        "creationdate": None,
+        "creationid": None,
+        "changedate": None,
+        "segtype": None,
+        "changeid": None,
+        "o-tmf": None,
+        "srclang": None,
+    }
+
     def __init__(
         self,
-        xml_element: Element | None = None,
+        xml_element: _Element | None = None,
         notes: Iterable[Note] | None = [],
         props: Iterable[Prop] | None = [],
         tuvs: Iterable[Tuv] | None = [],
@@ -582,7 +569,56 @@ class Tu:
         o_tmf: str | None = None,
         srclang: str | None = None,
     ) -> None:
-        if not isinstance(xml_element, Element):
+        if xml_element is not None:
+            if xml_element.tag != "tu":
+                raise IncorrectTagError(xml_element, "tu")
+            for attr in self.__attrib:
+                val = xml_element.get(attr)
+                match attr:
+                    case "tuid":
+                        self.tuid = tuid if tuid else xml_element.get("tuid")
+                    case "o-encoding":
+                        self.o_encoding = o_encoding if o_encoding else val
+                    case "datatype":
+                        self.datatype = datatype if datatype else val
+                    case "usagecount":
+                        self.usagecount = usagecount if usagecount else val
+                    case "lastusagedate":
+                        self.lastusagedate = lastusagedate if lastusagedate else val
+                    case "creationtool":
+                        self.creationtool = creationtool if creationtool else val
+                    case "creationtoolversion":
+                        self.creationtoolversion = (
+                            creationtoolversion if creationtoolversion else val
+                        )
+                    case "creationdate":
+                        self.creationdate = creationdate if creationdate else val
+                    case "creationid":
+                        self.creationid = creationid if creationid else val
+                    case "changedate":
+                        self.changedate = changedate if changedate else val
+                    case "changeid":
+                        self.changeid = changeid if changeid else val
+                    case "segtype":
+                        self.segtype = segtype if segtype else val
+                    case "o-tmf":
+                        self.o_tmf = o_tmf if o_tmf else val
+                    case "srclang":
+                        self.srclang = srclang if srclang else val
+            self.notes = (
+                notes
+                if notes
+                else [Note(note) for note in xml_element if note.tag == "note"]
+            )
+            self.props = (
+                props
+                if props
+                else [Prop(prop) for prop in xml_element if prop.tag == "prop"]
+            )
+            self.tuvs = (
+                tuvs if tuvs else [Tuv(Tuv) for Tuv in xml_element if Tuv.tag == "Tuv"]
+            )
+        else:
             self.notes = notes
             self.props = props
             self.tuvs = tuvs
@@ -600,194 +636,62 @@ class Tu:
             self.changeid = changeid
             self.o_tmf = o_tmf
             self.srclang = srclang
-        else:
-            if xml_element.tag != "tu":
-                raise IncorrectTagError(
-                    found_element=xml_element, expected_element="tu"
-                )
-            if xml_element.text is not None and not match(
-                r"^[\n\s]+$", xml_element.text, flags=MULTILINE
-            ):
-                raise ExtraTextError(element=xml_element)
+        try:
+            self.tuid = int(self.tuid)
+        except (ValueError, TypeError):
+            pass
+        try:
+            self.usagecount = int(self.usagecount)
+        except (ValueError, TypeError):
+            pass
+        try:
+            self.creationdate = datetime.strptime(self.creationdate, r"%Y%m%dT%H%M%SZ")
+        except (ValueError, TypeError):
+            pass
+        try:
+            self.lastusagedate = datetime.strptime(
+                self.lastusagedate, r"%Y%m%dT%H%M%SZ"
+            )
+        except (ValueError, TypeError):
+            pass
+        try:
+            self.changedate = datetime.strptime(self.changedate, r"%Y%m%dT%H%M%SZ")
+        except (ValueError, TypeError):
+            pass
 
-            self.tuvs = (
-                tuvs
-                if tuvs is not None
-                else [Tuv(tuv) for tuv in xml_element if tuv.tag == "tuv"]
-            )
-            self.props = (
-                props
-                if props is not None
-                else [Prop(prop) for prop in xml_element if prop.tag == "prop"]
-            )
-            self.notes = (
-                notes
-                if notes is not None
-                else [Note(note) for note in xml_element if note.tag == "note"]
-            )
-            if tuid is not None:
-                self.tuid = tuid
+    def __setattr__(self, name: str, value: Any) -> None:
+        _name = name.replace("_", "-")
+        if _name in self.__attrib.keys():
+            if isinstance(value, datetime):
+                self.__attrib[_name] = value.strftime(r"%Y%m%dT%H%M%SZ")
+            elif isinstance(value, int):
+                self.__attrib[_name] = str(value)
             else:
-                try:
-                    self.tuid = int(xml_element.get("tuid"))
-                except (ValueError, TypeError):
-                    self.tuid = xml_element.get("tuid")
-            self.o_encoding = (
-                o_encoding
-                if o_encoding is not None
-                else xml_element.attrib.get("o-encoding")
-            )
-            self.datatype = (
-                datatype if datatype is not None else xml_element.attrib.get("datatype")
-            )
-            if usagecount is not None:
-                self.usagecount = usagecount
-            else:
-                try:
-                    self.usagecount = int(xml_element.get("usagecount"))
-                except (ValueError, TypeError):
-                    self.usagecount = xml_element.get("usagecount")
-            if lastusagedate is not None:
-                self.lastusagedate = lastusagedate
-            else:
-                try:
-                    self.lastusagedate = datetime.strptime(
-                        xml_element.get("lastusagedate"),
-                        r"%Y%m%dT%H%M%SZ",
-                    )
-                except TypeError:
-                    self.lastusagedate = xml_element.get("lastusagedate")
-            self.creationtool = (
-                creationtool
-                if creationtool is not None
-                else xml_element.attrib.get("creationtool")
-            )
-            self.creationtoolversion = (
-                creationtoolversion
-                if creationtoolversion is not None
-                else xml_element.get("creationtoolversion")
-            )
-            if creationdate is not None:
-                self.creationdate = creationdate
-            else:
-                try:
-                    self.creationdate = datetime.strptime(
-                        xml_element.get("creationdate"),
-                        r"%Y%m%dT%H%M%SZ",
-                    )
-                except TypeError:
-                    self.creationdate = xml_element.get("creationdate")
-            self.creationid = (
-                creationid if creationid is not None else xml_element.get("creationid")
-            )
-            if changedate is not None:
-                self.changedate = changedate
-            else:
-                try:
-                    self.changedate = datetime.strptime(
-                        xml_element.get("changedate"),
-                        r"%Y%m%dT%H%M%SZ",
-                    )
-                except (ValueError, TypeError):
-                    self.changedate = xml_element.get("changedate")
-            self.segtype = (
-                segtype if segtype is not None else xml_element.get("segtype")
-            )
-            self.changeid = (
-                changeid if changeid is not None else xml_element.get("changeid")
-            )
-            self.srclang = (
-                srclang if srclang is not None else xml_element.attrib.get("srclang")
-            )
+                self.__attrib[_name] = value
+        super().__setattr__(name, value)
 
-    def export(self) -> Element:
-        element: Element = Element("tu")
-        for key, val in vars(self).items():
-            match key, val:
-                case "notes", _ if isinstance(val, Iterable):
-                    for note in val:
-                        if not isinstance(note, Note):
-                            raise TypeError(
-                                f"notes should only contain Note objects, not {type(note)}"
-                            )
-                        element.insert(0, note.export())
-                case "tuvs", _ if isinstance(val, Iterable):
-                    for tuv in val:
-                        if not isinstance(tuv, Tuv):
-                            raise TypeError(
-                                f"tuv should only contain Tuv objects, not {type(tuv)}"
-                            )
-                        element.insert(0, tuv.export())
-                case "props", _ if isinstance(val, Iterable):
-                    for prop in val:
-                        if not isinstance(prop, Prop):
-                            raise TypeError(
-                                f"props should only contain Prop objects, not {type(prop)}"
-                            )
-                        element.insert(0, prop.export())
-                case (
-                    "datatype"
-                    | "creationtool"
-                    | "creationtoolversion"
-                    | "creationid"
-                    | "changeid"
-                    | "srclang",
-                    str(),
-                ):
-                    element.set(key, val)
-                case "o_tmf" | "o_encoding", str():
-                    key = key.replace("_", "-")
-                    element.set(key, val)
-                case "segtype", str():
-                    if val not in (
-                        "block",
-                        "paragraph",
-                        "sentence",
-                        "phrase",
-                    ):
-                        raise ValueError(
-                            f"attribute segtype must be one of block, paragraph, sentence or phrase not {val}"
-                        )
-                    element.set(key, val)
-                case "creationdate" | "changedate" | "lastusagedate", datetime():
-                    element.set(key, val.strftime(r"%Y%m%dT%H%M%SZ"))
-                case "creationdate" | "changedate" | "lastusagedate", str():
-                    val = val.upper()
-                    if not match(r"\d{8}T\d{6}Z", val):
-                        raise ValueError(
-                            f"attribute {key} is not formatted correctly. if using a string, value should be formatted as YYYYMMDDTHHMMSSZ."
-                        )
-                    element.set(key, val)
-                case "usagecount" | "tuid", str() | int():
-                    element.set(key, str(val))
-                case _, None:
-                    pass
-                case _, _:
-                    raise TypeError(
-                        f"cannot serialize attribute {key} with value {val}"
-                    )
-        return element
+    def export(self) -> _Element:
+        elem: _Element = Element(
+            "header", {attr: val for attr, val in self.__attrib.items() if val}
+        )
+        elem.extend([tuv.export() for tuv in self.tuvs])
+        elem.extend([note.export() for note in self.notes])
+        elem.extend([prop.export() for prop in self.props])
+        return elem
 
 
 class Tmx:
     def __init__(
         self,
-        xml_element: Element | None = None,
+        xml_element: _Element | None = None,
         header: Header | None = None,
         tus: Iterable[Tu] | None = [],
     ) -> None:
-        if not isinstance(xml_element, Element):
-            self.header = header
-            self.tus = tus
-        else:
+        if xml_element is not None:
             if xml_element.tag != "tmx":
                 raise IncorrectTagError(
                     found_element=xml_element, expected_element="tmx"
                 )
-            if xml_element.text is not None and not match(
-                r"^[\n\s]+$", xml_element.text, flags=MULTILINE
-            ):
-                raise ExtraTextError(element=xml_element)
             self.header = (
                 header
                 if header is not None
@@ -797,15 +701,9 @@ class Tmx:
                 tus if tus is not None else [Tu(tu) for tu in xml_element.iter("tu")]
             )
 
-    def export(self) -> Element:
-        element: Element = Element("tmx", version="1.4")
+    def export(self) -> _Element:
+        element: _Element = Element("tmx", version="1.4")
         element.insert(0, self.header.export())
-        body = Element("body")
+        body = SubElement(element, "body")
         body.extend([tu.export() for tu in self.tus])
-        element.append(body)
         return element
-
-
-a = parse("a.xml", XMLParser(encoding="utf-8", remove_blank_text=True)).getroot()
-b = Header(a)
-c = b.export()
