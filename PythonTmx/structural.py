@@ -345,7 +345,7 @@ class Header:
                 attrs["creationdate"] = self.creationdate.strftime(r"%Y%m%dT%H%M%SZ")
             except TypeError:
                 try:
-                    if not match("^\d{8}T\d{6}Z$", self.creationdate):
+                    if not match(r"^\d{8}T\d{6}Z$", self.creationdate):
                         warn(
                             "value for creationdate doesn't match the format YYYYMMDDTHHMMSSZ, CAT Tools might not be able to parse its value."
                         )
@@ -359,7 +359,7 @@ class Header:
                 attrs["changedate"] = self.changedate.strftime(r"%Y%m%dT%H%M%SZ")
             except TypeError:
                 try:
-                    if not match("^\d{8}T\d{6}Z$", self.changedate):
+                    if not match(r"^\d{8}T\d{6}Z$", self.changedate):
                         warn(
                             "value for changedate doesn't match the format YYYYMMDDTHHMMSSZ, CAT Tools might not be able to parse its value."
                         )
@@ -578,7 +578,7 @@ class Tuv:
                 attrs["lastusagedate"] = self.lastusagedate.strftime(r"%Y%m%dT%H%M%SZ")
             except TypeError:
                 try:
-                    if not match("^\d{8}T\d{6}Z$", self.lastusagedate):
+                    if not match(r"^\d{8}T\d{6}Z$", self.lastusagedate):
                         warn(
                             "value for lastusagedate doesn't match the format YYYYMMDDTHHMMSSZ, CAT Tools might not be able to parse its value."
                         )
@@ -594,7 +594,7 @@ class Tuv:
                 attrs["creationdate"] = self.creationdate.strftime(r"%Y%m%dT%H%M%SZ")
             except TypeError:
                 try:
-                    if not match("^\d{8}T\d{6}Z$", self.creationdate):
+                    if not match(r"^\d{8}T\d{6}Z$", self.creationdate):
                         warn(
                             "value for creationdate doesn't match the format YYYYMMDDTHHMMSSZ, CAT Tools might not be able to parse its value."
                         )
@@ -608,7 +608,7 @@ class Tuv:
                 attrs["changedate"] = self.changedate.strftime(r"%Y%m%dT%H%M%SZ")
             except TypeError:
                 try:
-                    if not match("^\d{8}T\d{6}Z$", self.changedate):
+                    if not match(r"^\d{8}T\d{6}Z$", self.changedate):
                         warn(
                             "value for changedate doesn't match the format YYYYMMDDTHHMMSSZ, CAT Tools might not be able to parse its value."
                         )
@@ -760,7 +760,7 @@ class Tu:
                 attrs["lastusagedate"] = self.lastusagedate.strftime(r"%Y%m%dT%H%M%SZ")
             except TypeError:
                 try:
-                    if not match("^\d{8}T\d{6}Z$", self.lastusagedate):
+                    if not match(r"^\d{8}T\d{6}Z$", self.lastusagedate):
                         warn(
                             "value for lastusagedate doesn't match the format YYYYMMDDTHHMMSSZ, CAT Tools might not be able to parse its value."
                         )
@@ -776,7 +776,7 @@ class Tu:
                 attrs["creationdate"] = self.creationdate.strftime(r"%Y%m%dT%H%M%SZ")
             except TypeError:
                 try:
-                    if not match("^\d{8}T\d{6}Z$", self.creationdate):
+                    if not match(r"^\d{8}T\d{6}Z$", self.creationdate):
                         warn(
                             "value for creationdate doesn't match the format YYYYMMDDTHHMMSSZ, CAT Tools might not be able to parse its value."
                         )
@@ -790,7 +790,7 @@ class Tu:
                 attrs["changedate"] = self.changedate.strftime(r"%Y%m%dT%H%M%SZ")
             except TypeError:
                 try:
-                    if not match("^\d{8}T\d{6}Z$", self.changedate):
+                    if not match(r"^\d{8}T\d{6}Z$", self.changedate):
                         warn(
                             "value for changedate doesn't match the format YYYYMMDDTHHMMSSZ, CAT Tools might not be able to parse its value."
                         )
@@ -813,7 +813,7 @@ class Tmx:
         self,
         xml_element: xml_Element | None = None,
         header: Header | None = None,
-        tus: Iterable[Tu] | None = [],
+        tus: Iterable[Tu] | None = [None],
     ) -> None:
         if xml_element is not None:
             if xml_element.tag != "tmx":
@@ -821,13 +821,12 @@ class Tmx:
                     found_element=xml_element, expected_element="tmx"
                 )
             self.header = (
-                header
-                if header is not None
-                else Header(xml_element=xml_element.find("header"))
+                header if header else Header(xml_element=xml_element.find("header"))
             )
-            self.tus = (
-                tus if tus is not None else [Tu(tu) for tu in xml_element.iter("tu")]
-            )
+            self.tus = tus if tus else [Tu(tu) for tu in xml_element.iter("tu")]
+        else:
+            self.header = None
+            self.tus = []
 
     def make_element(
         self, ElementType: Literal["lxml", "ElementTree"] = "lxml"
