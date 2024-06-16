@@ -4,9 +4,7 @@ from typing import Iterable, Literal
 from warnings import warn
 from xml.etree.ElementTree import Element as std_Element
 
-from errors import (
-    IncorrectTagError,
-)
+from errors import IncorrectTagError
 from inline import Bpt, Ept, Hi, It, Ph
 from lxml.etree import Element as lxml_Element_Factory
 from lxml.etree import _Element as lxml_Element_type
