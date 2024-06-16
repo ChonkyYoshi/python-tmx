@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Iterable, Literal
 
-from errors import IncorrectTagError, MissingRequiredAttributeError
+from errors import IncorrectTagError, RequiredAttributeError
 from lxml.etree import Element, _Element
 
 __all__ = ["Bpt", "Ept", "Hi", "It", "Ph", "Ut", "Sub"]
@@ -204,7 +204,7 @@ class Bpt:
         if isinstance(self.type_, str):
             element.set("type", str(self.type_))
         if self.i is None:
-            raise MissingRequiredAttributeError(element=element, attribute="i")
+            raise RequiredAttributeError(element=element, attribute="i")
         elif not isinstance(self.i, (int, str)):
             raise TypeError(
                 f"attribute i must be a string or an int not {type(self.x)}"
@@ -276,7 +276,7 @@ class Ept:
     def export(self) -> _Element:
         element: _Element = Element("ept")
         if self.i is None:
-            raise MissingRequiredAttributeError(element=element, attribute="i")
+            raise RequiredAttributeError(element=element, attribute="i")
         elif not isinstance(self.i, (int, str)):
             raise TypeError(
                 f"attribute i must be a string or an int not {type(self.x)}"
@@ -350,7 +350,7 @@ class It:
     def export(self) -> Element:
         element: Element = Element("it")
         if self.pos is None:
-            raise MissingRequiredAttributeError(element=element, attribute="pos")
+            raise RequiredAttributeError(element=element, attribute="pos")
         elif not isinstance(self.pos, str):
             raise TypeError(f"attribute pos must be a string not {type(self.pos)}")
         elif self.pos not in ("begin", "end"):
