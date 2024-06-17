@@ -1,23 +1,32 @@
+from abc import ABC
 from datetime import datetime
 from re import match
 from typing import Iterable, Literal
 from warnings import warn
 from xml.etree.ElementTree import Element as std_Element
 
+import validate
 from errors import IncorrectTagError
 from inline import Bpt, Ept, Hi, It, Ph
 from lxml.etree import Element as lxml_Element_Factory
 from lxml.etree import _Element as lxml_Element_type
 
-__all__ = ["Header", "Map", "Note", "Prop", "Seg", "Tmx", "Tu", "Tuv", "Ude"]
-
-type xml_Element = lxml_Element_type | std_Element
+type XmlElement = lxml_Element_type | std_Element
 
 
-class Prop:
+class TmxElement(ABC): ...
+
+
+class Prop(TmxElement):
+    REQ_ATTRIBUTES = (("type", str),)
+    OPT_ATTRIBUTES = (
+        ("lang", str),
+        ("o-encoding", str),
+    )
+
     def __init__(
         self,
-        xml_element: xml_Element | None = None,
+        xml_element: XmlElement | None = None,
         text: str | None = None,
         type_: str | None = None,
         lang: str | None = None,
@@ -26,7 +35,7 @@ class Prop:
         if xml_element is not None:
             if xml_element.tag != "prop":
                 raise IncorrectTagError(xml_element.tag, "prop")
-            self.type_ = type_ if type_ else xml_element.get("type")
+            self.type_ = type_ if type_ else (xml_element.get("type"))
             self.o_encoding = (
                 o_encoding if o_encoding else xml_element.get("o-encoding")
             )
@@ -44,33 +53,27 @@ class Prop:
 
     def make_element(
         self, ElementType: Literal["lxml", "ElementTree"] = "lxml"
-    ) -> xml_Element:
+    ) -> XmlElement:
         elem = (
             lxml_Element_Factory("prop")
             if ElementType == "lxml"
             else std_Element("prop")
         )
         elem.text = self.text
-        elem.attrib = self.make_attrib_dict()
+        elem.attrib = validate.validate_attributes(self)
         return elem
 
-    def make_attrib_dict(self) -> dict[str, str]:
-        attrs = {}
-        if self.type_:
-            attrs["type"] = self.type_
-        else:
-            raise AttributeError("Required attribute type is missing")
-        if self.lang:
-            attrs["{http://www.w3.org/XML/1998/namespace}lang"] = self.lang
-        if self.o_encoding:
-            attrs["o-encoding"] = self.o_encoding
-        return attrs
 
+class Note(TmxElement):
+    REQ_ATTRIBUTES = tuple()
+    OPT_ATTRIBUTES = (
+        ("lang", str),
+        ("o-encoding", str),
+    )
 
-class Note:
     def __init__(
         self,
-        xml_element: xml_Element | None = None,
+        xml_element: XmlElement | None = None,
         text: str | None = None,
         lang: str | None = None,
         o_encoding: str | None = None,
@@ -94,29 +97,28 @@ class Note:
 
     def make_element(
         self, ElementType: Literal["lxml", "ElementTree"] = "lxml"
-    ) -> xml_Element:
+    ) -> XmlElement:
         elem = (
             lxml_Element_Factory("note")
             if ElementType == "lxml"
             else std_Element("note")
         )
         elem.text = self.text
-        elem.attrib = self.make_attrib_dict()
+        elem.attrib = elem.attrib = validate.validate_attributes(self)
         return elem
 
-    def make_attrib_dict(self) -> dict[str, str]:
-        attrs = {}
-        if self.lang:
-            attrs["{http://www.w3.org/XML/1998/namespace}lang"] = self.lang
-        if self.o_encoding:
-            attrs["o-encoding"] = self.o_encoding
-        return attrs
 
+class Map(TmxElement):
+    REQ_ATTRIBUTES = (("unicode", str),)
+    OPT_ATTRIBUTES = (
+        ("code", str),
+        ("ent", str),
+        ("subst", str),
+    )
 
-class Map:
     def __init__(
         self,
-        xml_element: xml_Element | None = None,
+        xml_element: XmlElement | None = None,
         unicode: str | None = None,
         code: str | None = None,
         ent: str | None = None,
@@ -137,31 +139,21 @@ class Map:
 
     def make_element(
         self, ElementType: Literal["lxml", "ElementTree"] = "lxml"
-    ) -> xml_Element:
+    ) -> XmlElement:
         elem = (
             lxml_Element_Factory("map") if ElementType == "lxml" else std_Element("map")
         )
-        elem.attrib = self.make_attrib_dict()
+        elem.attrib = elem.attrib = validate.validate_attributes(self)
         return elem
 
-    def make_attrib_dict(self) -> dict[str, str]:
-        attrs = {}
-        if self.unicode:
-            attrs["unicode"] = self.unicode
-        else:
-            raise AttributeError("Required attribute unicode is missing")
-        if self.code:
-            attrs["code"] = self.code
-        if self.ent:
-            attrs["ent"] = self.ent
-        if self.subst:
-            attrs["subst"] = self.subst
 
+class Ude(TmxElement):
+    REQ_ATTRIBUTES = (("name", str),)
+    OPT_ATTRIBUTES = (("base", str),)
 
-class Ude:
     def __init__(
         self,
-        xml_element: xml_Element | None = None,
+        xml_element: XmlElement | None = None,
         maps: Iterable[Map] | None = [],
         name: str | None = None,
         base: str | None = None,
@@ -183,11 +175,11 @@ class Ude:
 
     def make_element(
         self, ElementType: Literal["lxml", "ElementTree"] = "lxml"
-    ) -> xml_Element:
+    ) -> XmlElement:
         elem = (
             lxml_Element_Factory("ude") if ElementType == "lxml" else std_Element("ude")
         )
-        elem.attrib = self.make_attrib_dict()
+        elem.attrib = validate.validate_attributes(self)
         for map_ in self.maps:
             if map_.code and not self.base:
                 raise AttributeError(
@@ -196,19 +188,28 @@ class Ude:
             elem.append(map_.make_element())
         return elem
 
-    def make_attrib_dict(self) -> dict[str, str]:
-        attrs = {}
-        if self.name:
-            attrs["name"] = self.name
-        if self.base:
-            attrs["base"] = self.base
-        return attrs
 
+class Header(TmxElement):
+    REQ_ATTRIBUTES = (
+        ("creationtool", str),
+        ("creationtoolversion", str),
+        ("segtype", str),
+        ("o-tmf", str),
+        ("adminlang", str),
+        ("srclang", str),
+        ("datatype", str),
+    )
+    OPT_ATTRIBUTES = (
+        ("o-encoding", str),
+        ("creationdate", (str, datetime)),
+        ("creationid", str),
+        ("changedate", (str, datetime)),
+        ("changeid", str),
+    )
 
-class Header:
     def __init__(
         self,
-        xml_element: xml_Element | None = None,
+        xml_element: XmlElement | None = None,
         notes: Iterable[Note] | None = [],
         props: Iterable[Prop] | None = [],
         udes: Iterable[Ude] | None = [],
@@ -294,87 +295,23 @@ class Header:
 
     def make_element(
         self, ElementType: Literal["lxml", "ElementTree"] = "lxml"
-    ) -> xml_Element:
+    ) -> XmlElement:
         elem = (
             lxml_Element_Factory("header")
             if ElementType == "lxml"
             else std_Element("header")
         )
-        elem.attrib = self.make_attrib_dict()
+        elem.attrib = validate.validate_attributes(self)
         elem.extend([ude.make_element(ElementType) for ude in self.udes])
         elem.extend([note.make_element(ElementType) for note in self.notes])
         elem.extend([prop.make_element(ElementType) for prop in self.props])
         return elem
 
-    def make_attrib_dict(self) -> dict[str, str]:
-        attrs = {}
-        if self.creationtool:
-            attrs["creationtool"] = self.creationtool
-        else:
-            raise AttributeError("Required attribute creationtool is missing")
-        if self.creationtoolversion:
-            attrs["creationtoolversion"] = self.creationtoolversion
-        else:
-            raise AttributeError("Required attribute creationtoolversion is missing")
-        if self.segtype in ("block", "paragraph", "sentence", "phrase"):
-            attrs["segtype"] = self.segtype
-        else:
-            raise AttributeError(
-                "Requried attribute segtype must be one of block, paragraph, sentence or phrase"
-            )
-        if self.adminlang:
-            attrs["adminlang"] = self.adminlang
-        else:
-            raise AttributeError("Required attribute adminlang is missing")
-        if self.srclang:
-            attrs["srclang"] = self.srclang
-        else:
-            raise AttributeError("Required attribute srclang is missing")
-        if self.datatype:
-            attrs["datatype"] = self.datatype
-        else:
-            raise AttributeError("Required attribute datatype is missing")
-        if self.changeid:
-            attrs["changeid"] = self.changeid
-        if self.creationid:
-            attrs["creationid"] = self.creationid
-        if self.o_encoding:
-            attrs["o-encoding"] = self.o_encoding
-        if self.creationdate:
-            try:
-                attrs["creationdate"] = self.creationdate.strftime(r"%Y%m%dT%H%M%SZ")
-            except TypeError:
-                try:
-                    if not match(r"^\d{8}T\d{6}Z$", self.creationdate):
-                        warn(
-                            "value for creationdate doesn't match the format YYYYMMDDTHHMMSSZ, CAT Tools might not be able to parse its value."
-                        )
-                    attrs["creationdate"] = self.creationdate
-                except TypeError:
-                    pass
-        if self.creationid:
-            attrs["creationid"] = self.creationid
-        if self.changedate:
-            try:
-                attrs["changedate"] = self.changedate.strftime(r"%Y%m%dT%H%M%SZ")
-            except TypeError:
-                try:
-                    if not match(r"^\d{8}T\d{6}Z$", self.changedate):
-                        warn(
-                            "value for changedate doesn't match the format YYYYMMDDTHHMMSSZ, CAT Tools might not be able to parse its value."
-                        )
-                    attrs["changedate"] = self.changedate
-                except TypeError:
-                    pass
-        if self.changeid:
-            attrs["changeid"] = self.changeid
-        return attrs
 
-
-class Seg:
+class Seg(TmxElement):
     def __init__(
         self,
-        xml_element: xml_Element | None = None,
+        xml_element: XmlElement | None = None,
         content: Iterable[str | Bpt | Ept | It | Ph | Hi] | str | None = [],
     ) -> None:
         if xml_element is None:
@@ -422,7 +359,7 @@ class Seg:
 
     def make_element(
         self, ElementType: Literal["lxml", "ElementTree"] = "lxml"
-    ) -> xml_Element:
+    ) -> XmlElement:
         elem = (
             lxml_Element_Factory("seg") if ElementType == "lxml" else std_Element("seg")
         )
@@ -447,10 +384,26 @@ class Seg:
         return elem
 
 
-class Tuv:
+class Tuv(TmxElement):
+    REQ_ATTRIBUTES = (("lang", str),)
+    OPT_ATTRIBUTES = (
+        ("lang", str),
+        ("o_encoding", str),
+        ("datatype", str),
+        ("usagecount", (str, int)),
+        ("lastusagedate", (str, datetime)),
+        ("creationtool", str),
+        ("creationtoolversion", str),
+        ("creationdate", (str, datetime)),
+        ("creationid", str),
+        ("changedate", (str, datetime)),
+        ("changeid", str),
+        ("o_tmf", str),
+    )
+
     def __init__(
         self,
-        xml_element: xml_Element | None = None,
+        xml_element: XmlElement | None = None,
         notes: Iterable[Note] | None = [],
         props: Iterable[Prop] | None = [],
         segment: Seg | None = None,
@@ -551,7 +504,7 @@ class Tuv:
 
     def make_element(
         self, ElementType: Literal["lxml", "ElementTree"] = "lxml"
-    ) -> xml_Element:
+    ) -> XmlElement:
         elem = (
             lxml_Element_Factory("tuv") if ElementType == "lxml" else std_Element("tuv")
         )
@@ -622,10 +575,28 @@ class Tuv:
         return attrs
 
 
-class Tu:
+class Tu(TmxElement):
+    REQ_ATTRIBUTES = tuple()
+    OPT_ATTRIBUTES = (
+        ("tuid", (str, int)),
+        ("o_encoding", str),
+        ("datatype", str),
+        ("usagecount", (str, int)),
+        ("lastusagedate", (str, datetime)),
+        ("creationtool", str),
+        ("creationtoolversion", str),
+        ("creationdate", (str, datetime)),
+        ("creationid", str),
+        ("changedate", (str, datetime)),
+        ("segtype", (str, Literal["block", "paragraph", "sentence", "phrase"])),
+        ("changeid", str),
+        ("o_tmf", str),
+        ("srclang", str),
+    )
+
     def __init__(
         self,
-        xml_element: xml_Element | None = None,
+        xml_element: XmlElement | None = None,
         notes: Iterable[Note] | None = [],
         props: Iterable[Prop] | None = [],
         tuvs: Iterable[Tuv] | None = [],
@@ -735,7 +706,7 @@ class Tu:
 
     def make_element(
         self, ElementType: Literal["lxml", "ElementTree"] = "lxml"
-    ) -> xml_Element:
+    ) -> XmlElement:
         elem = (
             lxml_Element_Factory("tu") if ElementType == "lxml" else std_Element("tu")
         )
@@ -808,10 +779,13 @@ class Tu:
         return attrs
 
 
-class Tmx:
+class Tmx(TmxElement):
+    REQ_ATTRIBUTES = ("version", "1.4")
+    OPT_ATTRIBUTES = tuple()
+
     def __init__(
         self,
-        xml_element: xml_Element | None = None,
+        xml_element: XmlElement | None = None,
         header: Header | None = None,
         tus: Iterable[Tu] | None = [None],
     ) -> None:
@@ -830,7 +804,7 @@ class Tmx:
 
     def make_element(
         self, ElementType: Literal["lxml", "ElementTree"] = "lxml"
-    ) -> xml_Element:
+    ) -> XmlElement:
         elem = (
             lxml_Element_Factory("tmx", {"version": "1.4"})
             if ElementType == "lxml"

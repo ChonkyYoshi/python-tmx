@@ -1,7 +1,4 @@
-__all__ = [
-    "IncorrectTagError",
-    "RequiredAttributeError",
-]
+__all__ = ["IncorrectTagError", "RequiredAttributeError", "InvalidTmxError"]
 
 
 class IncorrectTagError(Exception):
@@ -16,3 +13,8 @@ class RequiredAttributeError(Exception):
         super().__init__(
             f"Element {element.tag} is missing required attribute {attribute}"
         )
+
+
+class InvalidTmxError(Exception):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
