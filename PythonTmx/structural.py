@@ -1,46 +1,105 @@
 from datetime import datetime
 from re import match
-from typing import Any, Callable, Literal, Optional
-from xml.etree.ElementTree import Element
+from typing import Any, Callable, Iterable, Literal, Optional
+
+from lxml.etree import Element
 
 from PythonTmx.protocols import TmxElement, _XmlElement
 
 
 class Map(TmxElement):
-    unicode: str
-    code: str
-    ent: str
-    subst: str
+    unicode: Optional[str]
+    code: Optional[str]
+    ent: Optional[str]
+    subst: Optional[str]
 
     def __init__(
         self,
         XmlElement: Optional[_XmlElement] = None,
-        strict: bool = True,
-        **attribs,
+        **attribs: dict[str, Any],
     ) -> None:
-        def _parse_attributes(attrib: dict[str, Any], strict) -> None:
-            for key, val in attrib.items():
-                match key, val:
-                    case "unicode" | "code" | "ent" | "subst", str():
-                        setattr(self, key, val)
-                    case "unicode" | "code" | "ent" | "subst", _:
-                        if strict:
-                            raise TypeError(
-                                f"attribute '{key}' does not supports values "
-                                f"of type '{type(val).__name__}'"
-                            )
-                        setattr(self, key, val)
-                    case _:
-                        raise AttributeError(f"Unknown attribute found: '{key}'")
-
         if XmlElement is not None:
-            if attribs:
-                attrs: dict = XmlElement.attrib | attribs
-                _parse_attributes(attrs, strict)
-            else:
-                _parse_attributes(XmlElement.attrib, strict)
+            attrs: dict[str, Any] = XmlElement.attrib | attribs  # type: ignore
         else:
-            _parse_attributes(attribs, strict)
+            attrs = attribs
+        self.unicode = attrs.get("unicode")
+        self.code = attrs.get("code")
+        self.ent = attrs.get("ent")
+        self.subst = attrs.get("subst")
+
+    @property
+    def attrib(self) -> dict[str, str]:
+        attrs: dict[str, str] = {}
+        for key in ("unicode", "code", "ent", "subst"):
+            val: Optional[str] = getattr(self, key, None)
+            match key, val:
+                case _, str():
+                    attrs[key] = val
+                case "unicode", None:
+                    raise AttributeError(
+                        f"Attribute '{key}' is required and cannot"
+                        "have a value of None"
+                    )
+                case _:
+                    raise TypeError(f"Unsupported type for attribute '{key}'")
+        return attrs
+
+    def to_element(self, factory: Callable = Element) -> _XmlElement:
+        return factory("map", self.attrib)
+
+    def to_string(self) -> str:
+        attrs: dict = self.attrib
+        final: str = "<map "
+        for key, val in attrs.items():
+            final += f'{key}="{val}" '
+        final += "/>"
+        return final
+
+
+class Ude(TmxElement):
+    name: Optional[str]
+    base: Optional[str]
+    maps: Optional[Iterable[Map]]
+
+    def __init__(
+        self,
+        XmlElement: Optional[_XmlElement] = None,
+        **attribs: dict[str, Any],
+    ) -> None:
+        if XmlElement is not None:
+            attrs: dict[str, Any] = XmlElement.attrib | attribs  # type: ignore
+        else:
+            attrs = attribs
+        self.name = attrs.get("name")
+        self.base = attrs.get("base")
+        if attrs.get("maps", None) is not None:
+            self.maps = attrs.get("maps")
+        elif XmlElement is not None and len(XmlElement):
+            self.maps = [Map(child) for child in XmlElement if child.tag == "map"]
+        else:
+            self.maps = []
+
+    @property
+    def attrib(self) -> dict[str, str]:
+        attrs: dict[str, str] = {}
+        if self.name is None:
+            raise AttributeError(f"Attribute '{key}' is required and cannot"
+                        "have a value of None")
+        elif not isinstance(self.name, str):
+            
+
+        return attrs
+
+    def to_element(self, factory: Callable = Element) -> _XmlElement:
+        return factory("map", self.attrib)
+
+    def to_string(self) -> str:
+        attrs: dict = self.attrib
+        final: str = "<map "
+        for key, val in attrs.items():
+            final += f'{key}="{val}" '
+        final += "/>"
+        return final
 
 
 class Header(TmxElement):
@@ -60,10 +119,10 @@ class Header(TmxElement):
     def __init__(
         self,
         XmlElement: Optional[_XmlElement] = None,
-        **attribs,
+        **attribs: dict[str, Any],
     ) -> None:
         if XmlElement is not None:
-            attrs: dict = XmlElement.attrib | attribs
+            attrs: dict[str, Any] = XmlElement.attrib | attribs  # type: ignore
         else:
             attrs = attribs
         self.creationtool = attrs.get("creationtoool")
@@ -109,7 +168,7 @@ class Header(TmxElement):
             "changedate",
             "changeid",
         ):
-            val: str | datetime | None = getattr(self, key, None)
+            val: Optional[str | datetime] = getattr(self, key, None)
             match key, val:
                 case (
                     "creationtool"
@@ -167,21 +226,3 @@ class Header(TmxElement):
             final += f'{key}="{val}" '
         final += "/>"
         return final
-
-
-a = fromstring("""<header
-  creationtool="XYZTool"
-  creationtoolversion="1.01-023"
-  datatype="PlainText"
-  segtype="sentence"
-  adminlang="en-us"
-  srclang="EN"
-  o-tmf="ABCTransMem"
-  creationdate="20020101T163812Z"
-  creationid="ThomasJ"
-  changedate="20020413T023401Z"
-  changeid="Amity"
-  o-encoding="iso-8859-1"
- />""")
-
-b = Header(XmlElement=a)
