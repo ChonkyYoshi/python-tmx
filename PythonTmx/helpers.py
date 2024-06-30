@@ -1,4 +1,4 @@
-def escape_for_xml(value: str) -> str:
+def make_xml_string(value: str) -> str:
     return (
         value.replace("&", "&amp;")
         .replace(">", "&gt;")

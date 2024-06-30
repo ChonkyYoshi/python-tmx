@@ -5,7 +5,7 @@ from typing import Literal, Optional, Sequence
 from lxml.etree import Element, _Element
 
 from PythonTmx.base import TmxElement
-from PythonTmx.helpers import escape_for_xml
+from PythonTmx.helpers import make_xml_string
 
 
 class Prop(TmxElement):
@@ -73,13 +73,13 @@ class Prop(TmxElement):
 
     def to_element(self) -> _Element:
         prop_elem: _Element = Element(_tag="prop", attrib=self.xml_attrib())
-        prop_elem.text = self.text
+        prop_elem.text = self.text if self.text else ""
         return prop_elem
 
     def to_string(self) -> str:
         final: str = "<prop "
         for key, val in self.xml_attrib().items():
-            final += f'{escape_for_xml(key)}="{escape_for_xml(val)}" '
+            final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
         if self.text is not None:
             if isinstance(self.text, str):
                 final += self.text
@@ -142,13 +142,13 @@ class Note(TmxElement):
 
     def to_element(self) -> _Element:
         note_elem: _Element = Element(_tag="note", attrib=self.xml_attrib())
-        note_elem.text = self.text
+        note_elem.text = self.text if self.text else ""
         return note_elem
 
     def to_string(self) -> str:
         final: str = "<note "
         for key, val in self.xml_attrib().items():
-            final += f'{escape_for_xml(key)}="{escape_for_xml(val)}" '
+            final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
         if self.text is not None:
             if isinstance(self.text, str):
                 final += self.text
@@ -201,7 +201,7 @@ class Map(TmxElement):
     def to_string(self) -> str:
         final: str = "<map "
         for key, val in self.xml_attrib().items():
-            final += f'{escape_for_xml(key)}="{escape_for_xml(val)}" '
+            final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
         final += "/>"
         return final
 
@@ -277,7 +277,7 @@ class Ude(TmxElement):
     def to_string(self) -> str:
         final: str = "<ude "
         for key, val in self.xml_attrib().items():
-            final += f'{escape_for_xml(key)}="{escape_for_xml(val)}" '
+            final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
         if self.maps and len(self.maps):
             final += ">"
             for map_ in self.maps:
@@ -417,7 +417,7 @@ class Header(TmxElement):
     def to_string(self) -> str:
         final: str = "<header "
         for key, val in self.xml_attrib().items():
-            final += f'{escape_for_xml(key)}="{escape_for_xml(val)}" '
+            final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
         if self.udes and len(self.udes):
             final += ">"
             for ude in self.udes:
