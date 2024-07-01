@@ -1,4 +1,5 @@
 from datetime import datetime
+from logging import getLogger
 from re import match
 from typing import Literal, Optional, Sequence
 
@@ -7,8 +8,11 @@ from lxml.etree import Element, _Element
 from PythonTmx.base import TmxElement
 from PythonTmx.helpers import make_xml_string
 
+logger = getLogger()
+
 
 class Prop(TmxElement):
+    __attributes: tuple[str, str, str] = ("type", "lang", "oencoding")
     type: Optional[str]
     lang: Optional[str]
     oencoding: Optional[str]
