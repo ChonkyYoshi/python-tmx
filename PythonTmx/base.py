@@ -13,5 +13,5 @@ class TmxElement:
     def to_string(self) -> str:
         raise NotImplementedError
 
-    def xml_attrib(self) -> dict[str, str]:
+    def make_xml_attrib_dict(self) -> dict[str, str]:
         raise NotImplementedError

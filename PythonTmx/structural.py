@@ -38,7 +38,7 @@ class Prop(TmxElement):
             else:
                 self.text = XmlElement.text
 
-    def xml_attrib(self) -> dict[str, str]:
+    def make_xml_attrib_dict(self) -> dict[str, str]:
         attrs: dict[str, str] = {}
         if isinstance(self.lang, str):
             attrs["{http://www.w3.org/XML/1998/namespace}lang"] = self.lang
@@ -72,13 +72,13 @@ class Prop(TmxElement):
         return attrs
 
     def to_element(self) -> _Element:
-        prop_elem: _Element = Element(_tag="prop", attrib=self.xml_attrib())
+        prop_elem: _Element = Element(_tag="prop", attrib=self.make_xml_attrib_dict())
         prop_elem.text = self.text if self.text else ""
         return prop_elem
 
     def to_string(self) -> str:
         final: str = "<prop "
-        for key, val in self.xml_attrib().items():
+        for key, val in self.make_xml_attrib_dict().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
         if self.text is not None:
             if isinstance(self.text, str):
@@ -117,7 +117,7 @@ class Note(TmxElement):
             else:
                 self.text = XmlElement.text
 
-    def xml_attrib(self) -> dict[str, str]:
+    def make_xml_attrib_dict(self) -> dict[str, str]:
         attrs: dict[str, str] = {}
         if isinstance(self.lang, str):
             attrs["{http://www.w3.org/XML/1998/namespace}lang"] = self.lang
@@ -141,13 +141,13 @@ class Note(TmxElement):
         return attrs
 
     def to_element(self) -> _Element:
-        note_elem: _Element = Element(_tag="note", attrib=self.xml_attrib())
+        note_elem: _Element = Element(_tag="note", attrib=self.make_xml_attrib_dict())
         note_elem.text = self.text if self.text else ""
         return note_elem
 
     def to_string(self) -> str:
         final: str = "<note "
-        for key, val in self.xml_attrib().items():
+        for key, val in self.make_xml_attrib_dict().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
         if self.text is not None:
             if isinstance(self.text, str):
@@ -176,7 +176,7 @@ class Map(TmxElement):
             if Attribute in self.__attributes:
                 setattr(self, Attribute, ToAssign.get(Attribute))
 
-    def xml_attrib(self) -> dict[str, str]:
+    def make_xml_attrib_dict(self) -> dict[str, str]:
         attrs: dict[str, str] = {}
         for key in self.__attributes:
             val: Optional[str] = getattr(self, key, None)
@@ -196,11 +196,11 @@ class Map(TmxElement):
         return attrs
 
     def to_element(self) -> _Element:
-        return Element(_tag="map", attrib=self.xml_attrib())
+        return Element(_tag="map", attrib=self.make_xml_attrib_dict())
 
     def to_string(self) -> str:
         final: str = "<map "
-        for key, val in self.xml_attrib().items():
+        for key, val in self.make_xml_attrib_dict().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
         final += "/>"
         return final
@@ -227,7 +227,7 @@ class Ude(TmxElement):
             if Attribute in self.__attributes:
                 setattr(self, Attribute, ToAssign.get(Attribute))
 
-    def xml_attrib(self) -> dict[str, str]:
+    def make_xml_attrib_dict(self) -> dict[str, str]:
         attrs: dict[str, str] = {}
         if self.name is None:
             raise AttributeError(
@@ -265,7 +265,7 @@ class Ude(TmxElement):
         return attrs
 
     def to_element(self) -> _Element:
-        element: _Element = Element("ude", self.xml_attrib())
+        element: _Element = Element("ude", self.make_xml_attrib_dict())
         if self.maps and len(self.maps):
             for map_ in self.maps:
                 if isinstance(map_, Map):
@@ -276,7 +276,7 @@ class Ude(TmxElement):
 
     def to_string(self) -> str:
         final: str = "<ude "
-        for key, val in self.xml_attrib().items():
+        for key, val in self.make_xml_attrib_dict().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
         if self.maps and len(self.maps):
             final += ">"
@@ -350,7 +350,7 @@ class Header(TmxElement):
             except (ValueError, TypeError):
                 pass
 
-    def xml_attrib(self) -> dict[str, str]:
+    def make_xml_attrib_dict(self) -> dict[str, str]:
         attrs: dict[str, str] = {}
         for key in self.__attributes:
             val: Optional[str | datetime] = getattr(self, key, None)
@@ -405,7 +405,7 @@ class Header(TmxElement):
         return attrs
 
     def to_element(self) -> _Element:
-        element = Element("header", self.xml_attrib())
+        element = Element("header", self.make_xml_attrib_dict())
         if self.udes and len(self.udes):
             element.extend([ude.to_element() for ude in self.udes])
         if self.notes and len(self.notes):
@@ -416,7 +416,7 @@ class Header(TmxElement):
 
     def to_string(self) -> str:
         final: str = "<header "
-        for key, val in self.xml_attrib().items():
+        for key, val in self.make_xml_attrib_dict().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
         if self.udes and len(self.udes):
             final += ">"
