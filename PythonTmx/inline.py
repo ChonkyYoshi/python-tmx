@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from logging import getLogger
 from typing import Literal, MutableSequence, Optional
 
 from lxml.etree import Element, _Element
@@ -5,20 +8,22 @@ from lxml.etree import Element, _Element
 from PythonTmx.base import TmxElement
 from PythonTmx.helpers import make_xml_string
 
+logger = getLogger("PythonTmx")
+
 
 class Sub(TmxElement):
     __attributes: tuple[str, str] = ("type", "datatype")
     type: Optional[int | str]
     datatype: Optional[str]
-    content: Optional[MutableSequence[str | "Bpt" | "Ept" | "It" | "Ph" | "Hi"]]
+    content: Optional[MutableSequence[str | Bpt | Ept | It | Ph | Hi]]
+    extra: Optional[dict]
 
     def __init__(self, XmlElement: _Element | None = None, **attribs) -> None:
-        self.content = []
+        self.content, self.extra = [], {}
         if XmlElement is not None:
             ToAssign: dict = dict(XmlElement.attrib.items()) | attribs
             if "content" in ToAssign.keys():
                 self.content = ToAssign.get("content")
-                ToAssign.pop("content")
             else:
                 self.content = []
                 if len(XmlElement):
@@ -36,13 +41,21 @@ class Sub(TmxElement):
                                 self.content.append(Hi(XmlElement=child))
                             case "ph":
                                 self.content.append(Ph(XmlElement=child))
+                            case _:
+                                logger.debug(
+                                    f"Ignoring unknown element {child.tag} encountered when building Sub object."
+                                )
                         if child.tail:
                             self.content.append(child.tail)
         else:
             ToAssign = attribs
-        for Attribute in self.__attributes:
-            if Attribute in ToAssign.keys():
+        for Attribute in ToAssign.keys():
+            if Attribute in self.__attributes:
                 setattr(self, Attribute, ToAssign.get(Attribute))
+            else:
+                self.extra[Attribute] = ToAssign[Attribute]
+        if self.extra:
+            logger.debug(f"Keeping {len(self.extra)} extra attributes")
 
     def make_xml_attrib_dict(self) -> dict[str, str]:
         attrs: dict[str, str] = {}
@@ -62,8 +75,17 @@ class Sub(TmxElement):
             )
         return attrs
 
-    def to_element(self) -> _Element:
+    def to_element(self, export_extra: bool = False) -> _Element:
         sub_elem: _Element = Element(_tag="sub", attrib=self.make_xml_attrib_dict())
+        if self.extra and export_extra:
+            logger.info(
+                "updating xml compliant dict with extra attributes. "
+                "Compatibility cannot be guaranteed if resulting element is "
+                "included in a tmx file.\n"
+                "Note: dict is passed 'as-is'. Please ensure all values are "
+                "serializable by lxml when exporting extra attributes"
+            )
+            sub_elem.attrib.update(self.extra.items())  # type: ignore
         if self.content:
             for child in self.content:
                 match child:
@@ -84,10 +106,20 @@ class Sub(TmxElement):
                         )
         return sub_elem
 
-    def to_string(self) -> str:
+    def to_string(self, export_extra: bool = False) -> str:
         final: str = "<sub "
         for key, val in self.make_xml_attrib_dict().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
+        if self.extra and export_extra:
+            logger.info(
+                "updating xml compliant dict with extra attributes. "
+                "Compatibility cannot be guaranteed if resulting element is "
+                "included in a tmx file.\n"
+                "Note: `str()` is called on both all keys and all values of "
+                "the dict and all the resulting strings are xml escaped"
+            )
+            for key, val in self.extra.items():
+                final += f'{make_xml_string(str(key))}="{make_xml_string(str(val))}" '
         if self.content:
             for child in self.content:
                 match child:
@@ -110,14 +142,14 @@ class It(TmxElement):
     type: Optional[str]
     pos: Optional[Literal["begin", "end"]]
     content: Optional[MutableSequence[str | Sub]]
+    extra: Optional[dict]
 
     def __init__(self, XmlElement: _Element | None = None, **attribs) -> None:
-        self.content = []
+        self.content, self.extra = [], {}
         if XmlElement is not None:
             ToAssign: dict = dict(XmlElement.attrib.items()) | attribs
             if "content" in ToAssign.keys():
                 self.content = ToAssign.get("content")
-                ToAssign.pop("content")
             else:
                 self.content = []
                 if len(XmlElement):
@@ -128,14 +160,20 @@ class It(TmxElement):
                             case "sub":
                                 self.content.append(Sub(XmlElement=child))
                             case _:
-                                raise ValueError
+                                logger.debug(
+                                    f"Ignoring unknown element {child.tag} encountered when building It object."
+                                )
                         if child.tail:
                             self.content.append(child.tail)
         else:
             ToAssign = attribs
-        for Attribute in self.__attributes:
-            if Attribute in ToAssign.keys():
+        for Attribute in ToAssign.keys():
+            if Attribute in self.__attributes:
                 setattr(self, Attribute, ToAssign.get(Attribute))
+            else:
+                self.extra[Attribute] = ToAssign[Attribute]
+        if self.extra:
+            logger.debug(f"Keeping {len(self.extra)} extra attributes")
         if self.x:
             try:
                 self.x = int(self.x)
@@ -176,8 +214,17 @@ class It(TmxElement):
                     )
         return attrs
 
-    def to_element(self) -> _Element:
+    def to_element(self, export_extra: bool = False) -> _Element:
         ph_elem: _Element = Element(_tag="it", attrib=self.make_xml_attrib_dict())
+        if self.extra and export_extra:
+            logger.info(
+                "updating xml compliant dict with extra attributes. "
+                "Compatibility cannot be guaranteed if resulting element is "
+                "included in a tmx file.\n"
+                "Note: `str(value)` is called on all elements of the dict and "
+                "all the resulting values are escaped for xml compliance"
+            )
+            ph_elem.attrib.update(self.extra)  # type: ignore
         if self.content:
             for child in self.content:
                 match child:
@@ -198,10 +245,20 @@ class It(TmxElement):
                         )
         return ph_elem
 
-    def to_string(self) -> str:
+    def to_string(self, export_extra: bool = False) -> str:
         final: str = "<it "
         for key, val in self.make_xml_attrib_dict().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
+        if self.extra and export_extra:
+            logger.info(
+                "updating xml compliant dict with extra attributes. "
+                "Compatibility cannot be guaranteed if resulting element is "
+                "included in a tmx file.\n"
+                "Note: `str()` is called on both all keys and all values of "
+                "the dict and all the resulting strings are xml escaped"
+            )
+            for key, val in self.extra.items():
+                final += f'{make_xml_string(str(key))}="{make_xml_string(str(val))}" '
         if self.content:
             for child in self.content:
                 match child:
@@ -224,14 +281,14 @@ class Ph(TmxElement):
     type: Optional[str]
     assoc: Optional[Literal["p", "f", "b"]]
     content: Optional[MutableSequence[str | Sub]]
+    extra: Optional[dict]
 
     def __init__(self, XmlElement: _Element | None = None, **attribs) -> None:
-        self.content = []
+        self.content, self.extra = [], {}
         if XmlElement is not None:
             ToAssign: dict = dict(XmlElement.attrib.items()) | attribs
             if "content" in ToAssign.keys():
                 self.content = ToAssign.get("content")
-                ToAssign.pop("content")
             else:
                 self.content = []
                 if len(XmlElement):
@@ -242,14 +299,20 @@ class Ph(TmxElement):
                             case "sub":
                                 self.content.append(Sub(XmlElement=child))
                             case _:
-                                raise ValueError
+                                logger.debug(
+                                    f"Ignoring unknown element {child.tag} encountered when building It object."
+                                )
                         if child.tail:
                             self.content.append(child.tail)
         else:
             ToAssign = attribs
-        for Attribute in self.__attributes:
-            if Attribute in ToAssign.keys():
+        for Attribute in ToAssign.keys():
+            if Attribute in self.__attributes:
                 setattr(self, Attribute, ToAssign.get(Attribute))
+            else:
+                self.extra[Attribute] = ToAssign[Attribute]
+        if self.extra:
+            logger.debug(f"Keeping {len(self.extra)} extra attributes")
         if self.x:
             try:
                 self.x = int(self.x)
@@ -286,8 +349,17 @@ class Ph(TmxElement):
                     )
         return attrs
 
-    def to_element(self) -> _Element:
+    def to_element(self, export_extra: bool = False) -> _Element:
         ph_elem: _Element = Element(_tag="ph", attrib=self.make_xml_attrib_dict())
+        if self.extra and export_extra:
+            logger.info(
+                "updating xml compliant dict with extra attributes. "
+                "Compatibility cannot be guaranteed if resulting element is "
+                "included in a tmx file.\n"
+                "Note: `str(value)` is called on all elements of the dict and "
+                "all the resulting values are escaped for xml compliance"
+            )
+            ph_elem.attrib.update(self.extra)  # type: ignore
         if self.content:
             for child in self.content:
                 match child:
@@ -308,10 +380,20 @@ class Ph(TmxElement):
                         )
         return ph_elem
 
-    def to_string(self) -> str:
+    def to_string(self, export_extra: bool = False) -> str:
         final: str = "<ph "
         for key, val in self.make_xml_attrib_dict().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
+        if self.extra and export_extra:
+            logger.info(
+                "updating xml compliant dict with extra attributes. "
+                "Compatibility cannot be guaranteed if resulting element is "
+                "included in a tmx file.\n"
+                "Note: `str()` is called on both all keys and all values of "
+                "the dict and all the resulting strings are xml escaped"
+            )
+            for key, val in self.extra.items():
+                final += f'{make_xml_string(str(key))}="{make_xml_string(str(val))}" '
         if self.content:
             for child in self.content:
                 match child:
@@ -334,14 +416,14 @@ class Bpt(TmxElement):
     x: Optional[int | str]
     type: Optional[str]
     content: Optional[MutableSequence[str | Sub]]
+    extra: Optional[dict]
 
     def __init__(self, XmlElement: _Element | None = None, **attribs) -> None:
-        self.content = []
+        self.content, self.extra = [], {}
         if XmlElement is not None:
             ToAssign: dict = dict(XmlElement.attrib.items()) | attribs
             if "content" in ToAssign.keys():
                 self.content = ToAssign.get("content")
-                ToAssign.pop("content")
             else:
                 self.content = []
                 if len(XmlElement):
@@ -352,14 +434,20 @@ class Bpt(TmxElement):
                             case "sub":
                                 self.content.append(Sub(XmlElement=child))
                             case _:
-                                raise ValueError
+                                logger.debug(
+                                    f"Ignoring unknown element {child.tag} encountered when building It object."
+                                )
                         if child.tail:
                             self.content.append(child.tail)
         else:
             ToAssign = attribs
-        for Attribute in self.__attributes:
-            if Attribute in ToAssign.keys():
+        for Attribute in ToAssign.keys():
+            if Attribute in self.__attributes:
                 setattr(self, Attribute, ToAssign.get(Attribute))
+            else:
+                self.extra[Attribute] = ToAssign[Attribute]
+        if self.extra:
+            logger.debug(f"Keeping {len(self.extra)} extra attributes")
         if self.x:
             try:
                 self.x = int(self.x)
@@ -399,8 +487,17 @@ class Bpt(TmxElement):
                     )
         return attrs
 
-    def to_element(self) -> _Element:
+    def to_element(self, export_extra: bool = False) -> _Element:
         bpt_elem: _Element = Element(_tag="bpt", attrib=self.make_xml_attrib_dict())
+        if self.extra and export_extra:
+            logger.info(
+                "updating xml compliant dict with extra attributes. "
+                "Compatibility cannot be guaranteed if resulting element is "
+                "included in a tmx file.\n"
+                "Note: `str(value)` is called on all elements of the dict and "
+                "all the resulting values are escaped for xml compliance"
+            )
+            bpt_elem.attrib.update(self.extra)  # type: ignore
         if self.content:
             for child in self.content:
                 match child:
@@ -421,10 +518,20 @@ class Bpt(TmxElement):
                         )
         return bpt_elem
 
-    def to_string(self) -> str:
+    def to_string(self, export_extra: bool = False) -> str:
         final: str = "<bpt "
         for key, val in self.make_xml_attrib_dict().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
+        if self.extra and export_extra:
+            logger.info(
+                "updating xml compliant dict with extra attributes. "
+                "Compatibility cannot be guaranteed if resulting element is "
+                "included in a tmx file.\n"
+                "Note: `str()` is called on both all keys and all values of "
+                "the dict and all the resulting strings are xml escaped"
+            )
+            for key, val in self.extra.items():
+                final += f'{make_xml_string(str(key))}="{make_xml_string(str(val))}" '
         if self.content:
             for child in self.content:
                 match child:
@@ -445,14 +552,14 @@ class Ept(TmxElement):
     __attributes: tuple[str] = ("i",)
     i: Optional[int | str]
     content: Optional[MutableSequence[str | Sub]]
+    extra: Optional[dict]
 
     def __init__(self, XmlElement: _Element | None = None, **attribs) -> None:
-        self.content = []
+        self.content, self.extra = [], {}
         if XmlElement is not None:
             ToAssign: dict = dict(XmlElement.attrib.items()) | attribs
             if "content" in ToAssign.keys():
                 self.content = ToAssign.get("content")
-                ToAssign.pop("content")
             else:
                 self.content = []
                 if len(XmlElement):
@@ -463,14 +570,20 @@ class Ept(TmxElement):
                             case "sub":
                                 self.content.append(Sub(XmlElement=child))
                             case _:
-                                raise ValueError
+                                logger.debug(
+                                    f"Ignoring unknown element {child.tag} encountered when building It object."
+                                )
                         if child.tail:
                             self.content.append(child.tail)
         else:
             ToAssign = attribs
-        for Attribute in self.__attributes:
-            if Attribute in ToAssign.keys():
+        for Attribute in ToAssign.keys():
+            if Attribute in self.__attributes:
                 setattr(self, Attribute, ToAssign.get(Attribute))
+            else:
+                self.extra[Attribute] = ToAssign[Attribute]
+        if self.extra:
+            logger.debug(f"Keeping {len(self.extra)} extra attributes")
         if self.i:
             try:
                 self.i = int(self.i)
@@ -503,8 +616,17 @@ class Ept(TmxElement):
                     )
         return attrs
 
-    def to_element(self) -> _Element:
+    def to_element(self, export_extra: bool = False) -> _Element:
         ept_elem: _Element = Element(_tag="ept", attrib=self.make_xml_attrib_dict())
+        if self.extra and export_extra:
+            logger.info(
+                "updating xml compliant dict with extra attributes. "
+                "Compatibility cannot be guaranteed if resulting element is "
+                "included in a tmx file.\n"
+                "Note: `str(value)` is called on all elements of the dict and "
+                "all the resulting values are escaped for xml compliance"
+            )
+            ept_elem.attrib.update(self.extra)  # type: ignore
         if self.content:
             for child in self.content:
                 match child:
@@ -525,10 +647,20 @@ class Ept(TmxElement):
                         )
         return ept_elem
 
-    def to_string(self) -> str:
-        final: str = "<bpt "
+    def to_string(self, export_extra: bool = False) -> str:
+        final: str = "<ept "
         for key, val in self.make_xml_attrib_dict().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
+        if self.extra and export_extra:
+            logger.info(
+                "updating xml compliant dict with extra attributes. "
+                "Compatibility cannot be guaranteed if resulting element is "
+                "included in a tmx file.\n"
+                "Note: `str()` is called on both all keys and all values of "
+                "the dict and all the resulting strings are xml escaped"
+            )
+            for key, val in self.extra.items():
+                final += f'{make_xml_string(str(key))}="{make_xml_string(str(val))}" '
         if self.content:
             for child in self.content:
                 match child:
@@ -538,10 +670,10 @@ class Ept(TmxElement):
                         final += child.to_string()
                     case _:
                         raise TypeError(
-                            "Bpt elements content can only consist of Sub objects "
+                            "Ept elements content can only consist of Sub objects "
                             f"or string but found '{type(child).__name__}"
                         )
-        final += "</bpt>"
+        final += "</ept>"
         return final
 
 
@@ -550,14 +682,14 @@ class Hi(TmxElement):
     x: Optional[int | str]
     type: Optional[str]
     content: Optional[MutableSequence[str | Bpt | Ept | It | Ph | "Hi"]]
+    extra: Optional[dict]
 
     def __init__(self, XmlElement: _Element | None = None, **attribs) -> None:
-        self.content = []
+        self.content, self.extra = [], {}
         if XmlElement is not None:
             ToAssign: dict = dict(XmlElement.attrib.items()) | attribs
             if "content" in ToAssign.keys():
                 self.content = ToAssign.get("content")
-                ToAssign.pop("content")
             else:
                 self.content = []
                 if len(XmlElement):
@@ -575,13 +707,19 @@ class Hi(TmxElement):
                                 self.content.append(Hi(XmlElement=child))
                             case "ph":
                                 self.content.append(Ph(XmlElement=child))
+                            case _:
+                                logger.debug(
+                                    f"Ignoring unknown element {child.tag} encountered when building Hi object."
+                                )
                         if child.tail:
                             self.content.append(child.tail)
         else:
             ToAssign = attribs
-        for Attribute in self.__attributes:
-            if Attribute in ToAssign.keys():
+        for Attribute in ToAssign.keys():
+            if Attribute in self.__attributes:
                 setattr(self, Attribute, ToAssign.get(Attribute))
+            else:
+                self.extra[Attribute] = ToAssign[Attribute]
         if self.x:
             try:
                 self.i = int(self.x)
@@ -606,32 +744,51 @@ class Hi(TmxElement):
             )
         return attrs
 
-    def to_element(self) -> _Element:
-        sub_elem: _Element = Element(_tag="hi", attrib=self.make_xml_attrib_dict())
+    def to_element(self, export_extra: bool = False) -> _Element:
+        hi_elem: _Element = Element(_tag="hi", attrib=self.make_xml_attrib_dict())
+        if self.extra and export_extra:
+            logger.info(
+                "updating xml compliant dict with extra attributes. "
+                "Compatibility cannot be guaranteed if resulting element is "
+                "included in a tmx file.\n"
+                "Note: `str(value)` is called on all elements of the dict and "
+                "all the resulting values are escaped for xml compliance"
+            )
+            hi_elem.attrib.update(self.extra)  # type: ignore
         if self.content:
             for child in self.content:
                 match child:
-                    case str() if not sub_elem.text:
-                        sub_elem.text = child
-                    case str() if sub_elem.text and not len(sub_elem):
-                        sub_elem.text += child
-                    case str() if not sub_elem[-1].tail:
-                        sub_elem[-1].tail = child
-                    case str() if sub_elem[-1].tail:
-                        sub_elem[-1].tail += child
+                    case str() if not hi_elem.text:
+                        hi_elem.text = child
+                    case str() if hi_elem.text and not len(hi_elem):
+                        hi_elem.text += child
+                    case str() if not hi_elem[-1].tail:
+                        hi_elem[-1].tail = child
+                    case str() if hi_elem[-1].tail:
+                        hi_elem[-1].tail += child
                     case Bpt() | Ept() | It() | Ph() | Hi():
-                        sub_elem.append(child.to_element())
+                        hi_elem.append(child.to_element())
                     case _:
                         raise TypeError(
                             "Sub elements content can only consist of Sub objects "
                             f"or string but found '{type(child).__name__}"
                         )
-        return sub_elem
+        return hi_elem
 
-    def to_string(self) -> str:
+    def to_string(self, export_extra: bool = False) -> str:
         final: str = "<hi "
         for key, val in self.make_xml_attrib_dict().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
+        if self.extra and export_extra:
+            logger.info(
+                "updating xml compliant dict with extra attributes. "
+                "Compatibility cannot be guaranteed if resulting element is "
+                "included in a tmx file.\n"
+                "Note: `str()` is called on both all keys and all values of "
+                "the dict and all the resulting strings are xml escaped"
+            )
+            for key, val in self.extra.items():
+                final += f'{make_xml_string(str(key))}="{make_xml_string(str(val))}" '
         if self.content:
             for child in self.content:
                 match child:
