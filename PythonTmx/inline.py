@@ -1,4 +1,4 @@
-from typing import Iterable, Optional
+from typing import Iterable, Literal, MutableSequence, Optional
 
 from lxml.etree import Element, _Element
 
@@ -9,36 +9,20 @@ from PythonTmx.helpers import make_xml_string
 class Sub(TmxElement): ...
 
 
-class Bpt(TmxElement):
-    __attributes: tuple[str, str, str] = ("i", "x", "type")
-    i: Optional[int | str]
+class Ph(TmxElement):
+    __attributes: tuple[str, str, str] = ("x", "type", "assoc")
     x: Optional[int | str]
     type: Optional[str]
-    content: Optional[Iterable[str | Sub]]
+    assoc: Optional[Literal["p", "f", "b"]]
+    content: Optional[MutableSequence[str | Sub]]
 
     def __init__(self, XmlElement: _Element | None = None, **attribs) -> None:
-        if XmlElement is None:
-            self.i = attribs.get("i")
-            self.x = attribs.get("x")
-            self.type = attribs.get("type")
-            self.content = attribs.get("text")
-        else:
-            if "type" in attribs.keys():
-                self.type = attribs["type"]
-            else:
-                self.type = XmlElement.get("type")
-            if "i" in attribs.keys():
-                self.i = attribs["i"]
-            else:
-                self.i = XmlElement.get("i")
-            if "x" in attribs.keys():
-                self.x = attribs["x"]
-            else:
-                self.x = XmlElement.get("x")
-            if "content" in attribs.keys():
-                self.content = attribs["content"]
-            else:
-                self.content = []
+        self.content = []
+        if XmlElement is not None:
+            ToAssign: dict = dict(XmlElement.attrib.items()) | attribs
+            if len(XmlElement):
+                if "content" not in ToAssign.keys():
+                    self.content = []
                 if XmlElement.text:
                     self.content.append(XmlElement.text)
                 for child in XmlElement:
@@ -46,6 +30,103 @@ class Bpt(TmxElement):
                         self.content.append(Sub(XmlElement=child))
                     if child.tail:
                         self.content.append(child.tail)
+        for Attribute in ToAssign.keys():
+            if Attribute in self.__attributes:
+                setattr(self, Attribute, ToAssign.get(Attribute))
+        if self.x:
+            try:
+                self.x = int(self.x)
+            except (ValueError, TypeError):
+                pass
+
+    def xml_attrib(self) -> dict[str, str]:
+        attrs: dict[str, str] = {}
+        for key in self.__attributes:
+            val: Optional[str | int] = getattr(self, key, None)
+            match key, val:
+                case "assoc", str():
+                    if val not in ("p", "f", "b"):
+                        raise ValueError(
+                            f"'assoc' must be one of 'p', 'f' or 'b' not '{val}'"
+                        )
+                    attrs["assoc"] = val
+                case "x", int():
+                    attrs["x"] = str(val)
+                case _, str():
+                    attrs[key] = val
+                case _:
+                    raise TypeError(
+                        f"Unsupported type for attribute '{key}' "
+                        "cannot build xml compliant attribute dict"
+                    )
+        return attrs
+
+    def to_element(self) -> _Element:
+        ph_elem: _Element = Element(_tag="bpt", attrib=self.xml_attrib())
+        if self.content:
+            for child in self.content:
+                match child:
+                    case str() if not ph_elem.text:
+                        ph_elem.text = child
+                    case str() if ph_elem.text and not len(ph_elem):
+                        ph_elem.text += child
+                    case str() if not ph_elem[-1].tail:
+                        ph_elem[-1].tail = child
+                    case str() if ph_elem[-1].tail:
+                        ph_elem[-1].tail += child
+                    case Sub():
+                        ph_elem.append(child.to_element())
+                    case _:
+                        raise TypeError(
+                            "Ph elements content can only consist of Sub objects "
+                            f"or string but found '{type(child).__name__}"
+                        )
+        return ph_elem
+
+    def to_string(self) -> str:
+        final: str = "<ph "
+        for key, val in self.xml_attrib().items():
+            final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
+        if self.content:
+            for child in self.content:
+                match child:
+                    case str():
+                        final += child
+                    case Sub():
+                        final += child.to_string()
+                    case _:
+                        raise TypeError(
+                            "Ph elements content can only consist of Sub objects "
+                            f"or string but found '{type(child).__name__}"
+                        )
+        final += "</ph>"
+        return final
+
+
+class Bpt(TmxElement):
+    __attributes: tuple[str, str, str] = ("i", "x", "type")
+    i: Optional[int | str]
+    x: Optional[int | str]
+    type: Optional[str]
+    content: Optional[MutableSequence[str | Sub]]
+
+    def __init__(self, XmlElement: _Element | None = None, **attribs) -> None:
+        self.content = []
+        if XmlElement is not None:
+            ToAssign: dict = dict(XmlElement.attrib.items()) | attribs
+            if len(XmlElement):
+                if "content" not in ToAssign.keys():
+                    self.content = []
+                if XmlElement.text:
+                    self.content.append(XmlElement.text)
+                for child in XmlElement:
+                    if child.tag == "sub":
+                        self.content.append(Sub(XmlElement=child))
+                    if child.tail:
+                        self.content.append(child.tail)
+        for Attribute in ToAssign.keys():
+            if Attribute in self.__attributes:
+                setattr(self, Attribute, ToAssign.get(Attribute))
         if self.i:
             try:
                 self.i = int(self.i)
@@ -120,14 +201,13 @@ class Bpt(TmxElement):
 
 
 class Ept(TmxElement):
-    __attributes: tuple[str] = ("i",)
     i: Optional[int | str]
     content: Optional[Iterable[str | Sub]]
 
     def __init__(self, XmlElement: _Element | None = None, **attribs) -> None:
         if XmlElement is None:
             self.i = attribs.get("i")
-            self.content = attribs.get("text")
+            self.content = attribs.get("content")
         else:
             if "i" in attribs.keys():
                 self.i = attribs["i"]
