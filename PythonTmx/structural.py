@@ -1,7 +1,7 @@
 from datetime import datetime
 from logging import getLogger
 from re import match
-from typing import Literal, Optional, Sequence
+from typing import Any, Literal, Optional, Sequence
 
 from lxml.etree import Element, _Element
 
@@ -16,84 +16,106 @@ class Prop(TmxElement):
     type: Optional[str]
     lang: Optional[str]
     oencoding: Optional[str]
-    text: Optional[str]
+    content: Optional[Sequence[Any]]
+    extra: Optional[dict]
 
     def __init__(self, XmlElement: _Element | None = None, **attribs) -> None:
-        if XmlElement is None:
-            self.type = attribs.get("type")
-            self.lang = attribs.get("lang")
-            self.oencoding = attribs.get("oencoding")
-            self.text = attribs.get("text")
+        self.content, self.extra = [], {}
+        if XmlElement is not None:
+            ToAssign: dict = dict(XmlElement.attrib.items()) | attribs
+            if "content" in ToAssign.keys():
+                self.content = ToAssign.get("content")
+            else:
+                self.content = []
+                if len(XmlElement):
+                    if XmlElement.text:
+                        self.content.append(XmlElement.text)
+                    for child in XmlElement:
+                        self.content.append(child)
         else:
-            if "type" in attribs.keys():
-                self.type = attribs["type"]
+            ToAssign = attribs
+        for Attribute in ToAssign.keys():
+            if Attribute in self.__attributes:
+                setattr(self, Attribute, ToAssign.get(Attribute))
             else:
-                self.type = XmlElement.get("type")
-            if "lang" in attribs.keys():
-                self.lang = attribs["lang"]
-            else:
-                self.lang = XmlElement.get("{http://www.w3.org/XML/1998/namespace}lang")
-            if "oencoding" in attribs.keys():
-                self.oencoding = attribs["oencoding"]
-            else:
-                self.oencoding = XmlElement.get("o-encoding")
-            if "text" in attribs.keys():
-                self.text = attribs["text"]
-            else:
-                self.text = XmlElement.text
+                self.extra[Attribute] = ToAssign[Attribute]
 
-    def make_xml_attrib_dict(self) -> dict[str, str]:
+    def tmx_attributes(self) -> dict[str, str]:
         attrs: dict[str, str] = {}
-        if isinstance(self.lang, str):
-            attrs["{http://www.w3.org/XML/1998/namespace}lang"] = self.lang
-        elif self.lang is None:
-            pass
+        if self.type and isinstance(self.type, str):
+            attrs["type"] = self.type
         else:
             raise TypeError(
-                "Unsupported type for attribute 'lang' "
-                "Cannot build xml compliant attribute dict"
+                "Unsupported type for attribute 'type' "
+                "cannot build xml compliant attribute dict"
             )
-        if hasattr(self, "oencoding"):
-            if isinstance(self.oencoding, str):
-                attrs["o-encoding"] = self.oencoding
-            elif self.oencoding is None:
-                pass
-            else:
-                raise TypeError(
-                    "Unsupported type for attribute 'oencoding' "
-                    "Cannot build xml compliant attribute dict"
-                )
-        if hasattr(self, "type"):
-            if isinstance(self.type, str):
-                attrs["type"] = self.type
-            elif self.type is None:
-                pass
-            else:
-                raise TypeError(
-                    "Unsupported type for attribute 'type' "
-                    "Cannot build xml compliant attribute dict"
-                )
+        if self.x and isinstance(self.x, (str, int)):
+            attrs["x"] = str(self.x)
+        else:
+            raise TypeError(
+                "Unsupported type for attribute 'x' "
+                "cannot build xml compliant attribute dict"
+            )
         return attrs
 
-    def to_element(self) -> _Element:
-        prop_elem: _Element = Element(_tag="prop", attrib=self.make_xml_attrib_dict())
-        prop_elem.text = self.text if self.text else ""
-        return prop_elem
+    def to_element(self, export_extra: bool = False) -> _Element:
+        hi_elem: _Element = Element(_tag="hi", attrib=self.tmx_attributes())
+        if self.extra and export_extra:
+            logger.info(
+                "updating xml compliant dict with extra attributes. "
+                "Compatibility cannot be guaranteed if resulting element is "
+                "included in a tmx file.\n"
+                "Note: `str(value)` is called on all elements of the dict and "
+                "all the resulting values are escaped for xml compliance"
+            )
+            hi_elem.attrib.update(self.extra)  # type: ignore
+        if self.content:
+            for child in self.content:
+                match child:
+                    case str() if not hi_elem.text:
+                        hi_elem.text = child
+                    case str() if hi_elem.text and not len(hi_elem):
+                        hi_elem.text += child
+                    case str() if not hi_elem[-1].tail:
+                        hi_elem[-1].tail = child
+                    case str() if hi_elem[-1].tail:
+                        hi_elem[-1].tail += child
+                    case Bpt() | Ept() | It() | Ph() | Hi():
+                        hi_elem.append(child.to_element())
+                    case _:
+                        raise TypeError(
+                            "Sub elements content can only consist of Sub objects "
+                            f"or string but found '{type(child).__name__}"
+                        )
+        return hi_elem
 
-    def to_string(self) -> str:
-        final: str = "<prop "
-        for key, val in self.make_xml_attrib_dict().items():
+    def to_string(self, export_extra: bool = False) -> str:
+        final: str = "<hi "
+        for key, val in self.tmx_attributes().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
-        if self.text is not None:
-            if isinstance(self.text, str):
-                final += self.text
-            else:
-                raise TypeError(
-                    "Unsupported type for attribute 'text' cannot export to string"
-                )
-        else:
-            final += " "
-        final += "</prop>"
+        if self.extra and export_extra:
+            logger.info(
+                "updating xml compliant dict with extra attributes. "
+                "Compatibility cannot be guaranteed if resulting element is "
+                "included in a tmx file.\n"
+                "Note: `str()` is called on both all keys and all values of "
+                "the dict and all the resulting strings are xml escaped"
+            )
+            for key, val in self.extra.items():
+                final += f'{make_xml_string(str(key))}="{make_xml_string(str(val))}" '
+        if self.content:
+            for child in self.content:
+                match child:
+                    case str():
+                        final += child
+                    case Bpt() | Ept() | It() | Ph() | Hi():
+                        final += child.to_string()
+                    case _:
+                        raise TypeError(
+                            "Hi elements content can only consist of Sub objects "
+                            f"or string but found '{type(child).__name__}"
+                        )
+        final += "</hi>"
         return final
 
 
@@ -121,7 +143,7 @@ class Note(TmxElement):
             else:
                 self.text = XmlElement.text
 
-    def make_xml_attrib_dict(self) -> dict[str, str]:
+    def tmx_attributes(self) -> dict[str, str]:
         attrs: dict[str, str] = {}
         if isinstance(self.lang, str):
             attrs["{http://www.w3.org/XML/1998/namespace}lang"] = self.lang
@@ -145,13 +167,13 @@ class Note(TmxElement):
         return attrs
 
     def to_element(self) -> _Element:
-        note_elem: _Element = Element(_tag="note", attrib=self.make_xml_attrib_dict())
+        note_elem: _Element = Element(_tag="note", attrib=self.tmx_attributes())
         note_elem.text = self.text if self.text else ""
         return note_elem
 
     def to_string(self) -> str:
         final: str = "<note "
-        for key, val in self.make_xml_attrib_dict().items():
+        for key, val in self.tmx_attributes().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
         if self.text is not None:
             if isinstance(self.text, str):
@@ -180,7 +202,7 @@ class Map(TmxElement):
             if Attribute in self.__attributes:
                 setattr(self, Attribute, ToAssign.get(Attribute))
 
-    def make_xml_attrib_dict(self) -> dict[str, str]:
+    def tmx_attributes(self) -> dict[str, str]:
         attrs: dict[str, str] = {}
         for key in self.__attributes:
             val: Optional[str] = getattr(self, key, None)
@@ -200,11 +222,11 @@ class Map(TmxElement):
         return attrs
 
     def to_element(self) -> _Element:
-        return Element(_tag="map", attrib=self.make_xml_attrib_dict())
+        return Element(_tag="map", attrib=self.tmx_attributes())
 
     def to_string(self) -> str:
         final: str = "<map "
-        for key, val in self.make_xml_attrib_dict().items():
+        for key, val in self.tmx_attributes().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
         final += "/>"
         return final
@@ -231,7 +253,7 @@ class Ude(TmxElement):
             if Attribute in self.__attributes:
                 setattr(self, Attribute, ToAssign.get(Attribute))
 
-    def make_xml_attrib_dict(self) -> dict[str, str]:
+    def tmx_attributes(self) -> dict[str, str]:
         attrs: dict[str, str] = {}
         if self.name is None:
             raise AttributeError(
@@ -269,7 +291,7 @@ class Ude(TmxElement):
         return attrs
 
     def to_element(self) -> _Element:
-        element: _Element = Element("ude", self.make_xml_attrib_dict())
+        element: _Element = Element("ude", self.tmx_attributes())
         if self.maps and len(self.maps):
             for map_ in self.maps:
                 if isinstance(map_, Map):
@@ -280,7 +302,7 @@ class Ude(TmxElement):
 
     def to_string(self) -> str:
         final: str = "<ude "
-        for key, val in self.make_xml_attrib_dict().items():
+        for key, val in self.tmx_attributes().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
         if self.maps and len(self.maps):
             final += ">"
@@ -354,7 +376,7 @@ class Header(TmxElement):
             except (ValueError, TypeError):
                 pass
 
-    def make_xml_attrib_dict(self) -> dict[str, str]:
+    def tmx_attributes(self) -> dict[str, str]:
         attrs: dict[str, str] = {}
         for key in self.__attributes:
             val: Optional[str | datetime] = getattr(self, key, None)
@@ -409,7 +431,7 @@ class Header(TmxElement):
         return attrs
 
     def to_element(self) -> _Element:
-        element = Element("header", self.make_xml_attrib_dict())
+        element = Element("header", self.tmx_attributes())
         if self.udes and len(self.udes):
             element.extend([ude.to_element() for ude in self.udes])
         if self.notes and len(self.notes):
@@ -420,7 +442,7 @@ class Header(TmxElement):
 
     def to_string(self) -> str:
         final: str = "<header "
-        for key, val in self.make_xml_attrib_dict().items():
+        for key, val in self.tmx_attributes().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
         if self.udes and len(self.udes):
             final += ">"
