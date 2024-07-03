@@ -40,7 +40,7 @@ class Prop(TmxElement):
             else:
                 self.extra[Attribute] = ToAssign[Attribute]
 
-    def tmx_attributes(self) -> dict[str, str]:
+    def serialize_attributes(self) -> dict[str, str]:
         attrs: dict[str, str] = {}
         if self.type and isinstance(self.type, str):
             attrs["type"] = self.type
@@ -59,7 +59,7 @@ class Prop(TmxElement):
         return attrs
 
     def to_element(self, export_extra: bool = False) -> _Element:
-        hi_elem: _Element = Element(_tag="hi", attrib=self.tmx_attributes())
+        hi_elem: _Element = Element(_tag="hi", attrib=self.serialize_attributes())
         if self.extra and export_extra:
             logger.info(
                 "updating xml compliant dict with extra attributes. "
@@ -91,7 +91,7 @@ class Prop(TmxElement):
 
     def to_string(self, export_extra: bool = False) -> str:
         final: str = "<hi "
-        for key, val in self.tmx_attributes().items():
+        for key, val in self.serialize_attributes().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
         if self.extra and export_extra:
             logger.info(
@@ -143,7 +143,7 @@ class Note(TmxElement):
             else:
                 self.text = XmlElement.text
 
-    def tmx_attributes(self) -> dict[str, str]:
+    def serialize_attributes(self) -> dict[str, str]:
         attrs: dict[str, str] = {}
         if isinstance(self.lang, str):
             attrs["{http://www.w3.org/XML/1998/namespace}lang"] = self.lang
@@ -167,13 +167,13 @@ class Note(TmxElement):
         return attrs
 
     def to_element(self) -> _Element:
-        note_elem: _Element = Element(_tag="note", attrib=self.tmx_attributes())
+        note_elem: _Element = Element(_tag="note", attrib=self.serialize_attributes())
         note_elem.text = self.text if self.text else ""
         return note_elem
 
     def to_string(self) -> str:
         final: str = "<note "
-        for key, val in self.tmx_attributes().items():
+        for key, val in self.serialize_attributes().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
         if self.text is not None:
             if isinstance(self.text, str):
@@ -202,7 +202,7 @@ class Map(TmxElement):
             if Attribute in self.__attributes:
                 setattr(self, Attribute, ToAssign.get(Attribute))
 
-    def tmx_attributes(self) -> dict[str, str]:
+    def serialize_attributes(self) -> dict[str, str]:
         attrs: dict[str, str] = {}
         for key in self.__attributes:
             val: Optional[str] = getattr(self, key, None)
@@ -222,11 +222,11 @@ class Map(TmxElement):
         return attrs
 
     def to_element(self) -> _Element:
-        return Element(_tag="map", attrib=self.tmx_attributes())
+        return Element(_tag="map", attrib=self.serialize_attributes())
 
     def to_string(self) -> str:
         final: str = "<map "
-        for key, val in self.tmx_attributes().items():
+        for key, val in self.serialize_attributes().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
         final += "/>"
         return final
@@ -253,7 +253,7 @@ class Ude(TmxElement):
             if Attribute in self.__attributes:
                 setattr(self, Attribute, ToAssign.get(Attribute))
 
-    def tmx_attributes(self) -> dict[str, str]:
+    def serialize_attributes(self) -> dict[str, str]:
         attrs: dict[str, str] = {}
         if self.name is None:
             raise AttributeError(
@@ -291,7 +291,7 @@ class Ude(TmxElement):
         return attrs
 
     def to_element(self) -> _Element:
-        element: _Element = Element("ude", self.tmx_attributes())
+        element: _Element = Element("ude", self.serialize_attributes())
         if self.maps and len(self.maps):
             for map_ in self.maps:
                 if isinstance(map_, Map):
@@ -302,7 +302,7 @@ class Ude(TmxElement):
 
     def to_string(self) -> str:
         final: str = "<ude "
-        for key, val in self.tmx_attributes().items():
+        for key, val in self.serialize_attributes().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
         if self.maps and len(self.maps):
             final += ">"
@@ -376,7 +376,7 @@ class Header(TmxElement):
             except (ValueError, TypeError):
                 pass
 
-    def tmx_attributes(self) -> dict[str, str]:
+    def serialize_attributes(self) -> dict[str, str]:
         attrs: dict[str, str] = {}
         for key in self.__attributes:
             val: Optional[str | datetime] = getattr(self, key, None)
@@ -431,7 +431,7 @@ class Header(TmxElement):
         return attrs
 
     def to_element(self) -> _Element:
-        element = Element("header", self.tmx_attributes())
+        element = Element("header", self.serialize_attributes())
         if self.udes and len(self.udes):
             element.extend([ude.to_element() for ude in self.udes])
         if self.notes and len(self.notes):
@@ -442,7 +442,7 @@ class Header(TmxElement):
 
     def to_string(self) -> str:
         final: str = "<header "
-        for key, val in self.tmx_attributes().items():
+        for key, val in self.serialize_attributes().items():
             final += f'{make_xml_string(key)}="{make_xml_string(val)}" '
         if self.udes and len(self.udes):
             final += ">"
