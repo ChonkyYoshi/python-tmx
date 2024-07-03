@@ -8,7 +8,7 @@ from lxml.etree import Element, _Element
 from PythonTmx.core import TmxElement
 from PythonTmx.helpers import make_xml_string
 
-logger = getLogger()
+logger = getLogger("PythonTmx Logger")
 
 
 class Sub(TmxElement): ...
@@ -27,11 +27,26 @@ class Ph(TmxElement): ...
 
 
 class Hi(TmxElement):
+    """
+    Delimits a section of text that has special meaning,
+    such as a terminological unit, a proper name,
+    an item that should not be modified, etc.
+
+    Required attributes:
+        None.
+
+    Optional attributes:
+        x: Optional[int | str]
+        type: Optional[str]
+
+    Contents:
+        MutableSequence[str | Bpt | Ept | It | Ph | Hi]
+    """
+
     __attributes: tuple[str, ...] = ("x", "type")
     x: Optional[int | str]
     type: Optional[str]
     content: MutableSequence[str | Bpt | Ept | It | Ph | Hi]
-    unknown_attributes: Optional[dict]
 
     def __init__(
         self,
@@ -39,27 +54,59 @@ class Hi(TmxElement):
         strict: bool = False,
         **attribs,
     ) -> None:
-        def set_attributes(attributes: dict, strict: bool) -> None:
-            logger.debug("Setting attributes")
-            for attribute in attributes:
-                match attribute:
-                    case "x":
-                        self.x = attributes.get("x")
-                    case "type":
-                        self.type = attributes.get("type")
-                    case _:
-                        if strict:
-                            raise AttributeError(
-                                "extra attributes are not allowed when strict mode is "
-                                "enabled"
-                            )
-                        logger.debug(
-                            "Storing unknown attributes "
-                            f"{attribute} = {attributes.get(attribute)}"
+        """
+        Initializes a Hi object.
+
+        Can be used either from scratch or by passing it a lxml `_Element`.
+        Note that it is possible to override any values parsed from the
+        lxml `_Element` by passing the desired values as a function argument.
+
+        Enabling strict mode during initialization will validate that *only*
+        attributes defined in the tmx spec are present, and that their value
+        is of the required type.
+
+        Args:
+            lxml_element (Optional[_Element], optional):
+            the lxml `_Element` to parse data from. Defaults to None.
+            strict (bool, optional): enables strict mode. Defaults to False.
+
+        Raises:
+
+        """
+
+        def set_attributes(
+            lxml_element: Optional[_Element], strict: bool, **attribs
+        ) -> None:
+            if lxml_element:
+                self.x = (
+                    lxml_element.get("x", None)
+                    if not attribs.get("x", None)
+                    else attribs.get("x", None)
+                )
+                self.type = (
+                    lxml_element.get("type", None)
+                    if not attribs.get("type", None)
+                    else attribs.get("type", None)
+                )
+            else:
+                self.x = attribs.get("x", None)
+                self.type = attribs.get("type", None)
+                try:
+                    if self.x is not None:
+                        self.x = int(self.x)
+                except (ValueError, TypeError) as e:
+                    if strict:
+                        e.add_note(
+                            "Value for attribute 'x' must be convertible to an int"
                         )
-                        if not self.unknown_attributes:
-                            self.unknown_attributes = {}
-                        self.unknown_attributes[attribute] = attributes[attribute]
+                        raise e
+                    logger.warning(
+                        "Value for attribute 'x' is not convertible to an int"
+                    )
+                try:
+                    assert isinstance(self.type, (str, type(None)))
+                except AssertionError:
+                    raise TypeError("Value for attribute 'type' must be a string")
 
         def parse_element(lxml_element: _Element, strict: bool) -> None:
             if lxml_element.text:
@@ -80,159 +127,108 @@ class Hi(TmxElement):
                         case _:
                             if strict:
                                 raise ValueError(
-                                    "Forbidden tag encountered when parsing "
+                                    "Unknown element encountered when parsing "
                                     f"lxml_element children. '{child.tag}' "
                                     "elements are not allowed inside a hi element"
                                 )
-                            logger.debug(f"ignoring forbidden element '{child.tag}'")
+                            logger.warning(f"ignoring unknown element '{child.tag}'")
                     if child.tail:
                         self.content.append(child.tail)
 
-        logger.debug(
-            f"Initializing Hi object{" with strict mode enabled." if strict else"."}"
-        )
-        if lxml_element is None:
-            set_attributes(attribs, strict)
-            if attribs.get("content"):
+        match lxml_element:
+            case None:
+                self.content = []
+            case _Element():
+                parse_element(lxml_element, strict)
+            case _ if attribs.get("content", None):
                 self.content = attribs["content"]
-        elif isinstance(lxml_element, _Element):
-            parse_element(lxml_element, strict)
-            set_attributes(dict(lxml_element.attrib.items()) | attribs, strict)
-        else:
-            raise TypeError(
-                "lxml_element must be an lxml '_Element' object "
-                f"or None, not '{type(lxml_element).__name}'"
-            )
-        logger.debug("Hi object initialized")
+                attribs.pop("content")
+            case _:
+                raise TypeError(
+                    "lxml_element must be of type _Element or None, "
+                    f"not '{type(lxml_element).__name__}'"
+                )
+        set_attributes(lxml_element, strict, **attribs)
 
-    def serialize_attributes(self, export_unknown_attributes: bool) -> dict[str, str]:
-        logger.debug(
-            "serializing attributes"
-            f"{" with keep_unknown enabled." if export_unknown_attributes else"."}"
-        )
+    def serialize_attributes(self) -> dict[str, str]:
         attrs: dict[str, str] = {}
         for key in self.__attributes:
             val = getattr(self, key, None)
             if val is not None:
                 match key, val:
                     case "x", int():
-                        logger.debug("converting self.x back to a str")
                         attrs["x"] = str(val)
                     case "x", str():
                         try:
-                            logger.debug("confirming self.x is an int")
                             attrs["x"] = str(int(val))
                         except ValueError:
                             raise ValueError(
-                                f"Attribute 'x' must be convertible to an int. "
-                                f"Cannot convert {val} to an int"
+                                "Attribute 'x' must be convertible to an int. "
+                                "Cannot serialize attributes"
                             )
                     case "x", _:
                         raise TypeError(
                             "Unsupported type for attribute 'x'. Expected a string "
-                            f"or an int, but got {type(key).__name__}"
+                            f"or an int, but got {type(key).__name__}. "
+                            "Cannot serialize attributes"
                         )
                     case "type", str():
                         attrs["type"] = val
                     case "type", _:
                         raise TypeError(
                             "Unsupported type for attribute 'type'. "
-                            f"Expected a string but got {type(key).__name__}"
+                            f"Expected a string but got {type(key).__name__}. "
+                            "Cannot serialize attributes"
                         )
-            else:
-                logger.debug(f"attribute {key} has a value of None, skipping")
-        logger.debug("tmx_attributes dict created, returning")
         return attrs
 
     def to_element(
         self,
-        export_unknown_attributes: bool = False,
     ) -> _Element:
-        logger.debug(
-            "calling to_element with "
-            f"export_unknown_attributes = {export_unknown_attributes}"
-        )
-        hi_elem: _Element = Element(
-            _tag="hi", attrib=self.serialize_attributes(export_unknown_attributes)
-        )
-        if export_unknown_attributes:
-            if self.unknown_attributes and len(self.unknown_attributes):
-                logger.debug(
-                    f"Adding {len(self.unknown_attributes)} unknown attributes"
-                )
-                hi_elem.attrib.update(self.unknown_attributes)
-            else:
-                logger.debug("No unknown attributes stored for that object")
-        if self.content:
-            for child in self.content:
-                match child:
-                    case str() if not hi_elem.text:
-                        hi_elem.text = child
-                    case str() if hi_elem.text and not len(hi_elem):
-                        hi_elem.text += child
-                    case str() if not hi_elem[-1].tail:
-                        hi_elem[-1].tail = child
-                    case str() if hi_elem[-1].tail:
-                        hi_elem[-1].tail += child
-                    case Bpt() | Ept() | It() | Ph() | Hi():
-                        hi_elem.append(child.to_element())
-                    case _:
-                        raise TypeError(
-                            "Only strings, Bpt, Ept, It, Ph, or Hi object "
-                            "are allowed inside a hi element but "
-                            f"encountered '{type(child).__name__}"
-                        )
-        logger.debug("Hi object successfully converted to a lxml element")
+        hi_elem: _Element = Element(_tag="hi", attrib=self.serialize_attributes())
+        for child in self.content:
+            match child:
+                case str() if not hi_elem.text:
+                    hi_elem.text = child
+                case str() if hi_elem.text and not len(hi_elem):
+                    hi_elem.text += child
+                case str() if not hi_elem[-1].tail:
+                    hi_elem[-1].tail = child
+                case str() if hi_elem[-1].tail:
+                    hi_elem[-1].tail += child
+                case Bpt() | Ept() | It() | Ph() | Hi():
+                    hi_elem.append(child.to_element())
+                case _:
+                    raise TypeError(
+                        "Only strings, Bpt, Ept, It, Ph, or Hi object "
+                        "are allowed inside a hi element but "
+                        f"encountered a '{type(child).__name__}'"
+                    )
         return hi_elem
 
-    def to_string(self, export_unknown_attributes: bool = False) -> str:
-        logger.debug(
-            f"calling to_string with keep_unknown_attributes = {export_unknown_attributes}"
-        )
+    def to_string(self) -> str:
         final: str = "<hi"
         final += "".join(
             [
-                f' {make_xml_string(str(key))}="{make_xml_string(str(val))}"'
-                for key, val in self.serialize_attributes(
-                    export_unknown_attributes
-                ).items()
+                f' {make_xml_string(key)}="{make_xml_string(val)}"'
+                for key, val in self.serialize_attributes().items()
             ]
         )
-
-        if export_unknown_attributes:
-            if self.unknown_attributes and len(self.unknown_attributes):
-                logger.debug(
-                    f"Adding {len(self.unknown_attributes)} unknown attributes"
-                )
-                final += "".join(
-                    (
-                        f' {make_xml_string(str(key))}="{make_xml_string(str(val))}"'
-                        for key, val in self.unknown_attributes.items()
-                    )
-                )
-
-            else:
-                logger.debug("No unknown attributes stored for that object")
         final += ">"
-        if self.content:
-            for child in self.content:
-                match child:
-                    case str():
-                        final += child
-                    case Bpt() | Ept() | It() | Ph() | Hi():
-                        logger.debug(
-                            f"converting a {type(child).__name__} object to string"
-                        )
-                        final += child.to_string()
-                    case _:
-                        raise TypeError(
-                            "Only strings, Bpt, Ept, It, Ph, or Hi object "
-                            "are allowed inside a hi element but "
-                            f"encountered '{type(child).__name__}"
-                        )
+        for child in self.content:
+            match child:
+                case str():
+                    final += child
+                case Bpt() | Ept() | It() | Ph() | Hi():
+                    final += child.to_string()
+                case _:
+                    raise TypeError(
+                        "Only strings, Bpt, Ept, It, Ph, or Hi object "
+                        "are allowed inside a hi element but "
+                        f"encountered '{type(child).__name__}'"
+                    )
         final += "</hi>"
-        logger.debug("Hi object successfully converted to a string")
         return final
 
 
-Hi(x=2, strict=True)
+Hi(lxml_element=123, x=[2, 1], strict=False)
