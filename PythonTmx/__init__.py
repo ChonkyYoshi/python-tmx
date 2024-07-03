@@ -1,4 +1,4 @@
-from logging import DEBUG, FileHandler, Formatter, LoggerAdapter, getLogger
+from logging import DEBUG, FileHandler, Formatter, getLogger
 
 _logger = getLogger("PythonTmx")
 _logger.setLevel(DEBUG)

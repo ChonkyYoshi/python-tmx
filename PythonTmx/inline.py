@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from logging import LoggerAdapter, getLogger
-from typing import Any, Literal, MutableSequence, Optional
+from typing import Literal, MutableSequence, Optional
 
 from lxml.etree import Element, _Element
 
-from PythonTmx.base import TmxElement
+from PythonTmx.core import TmxElement
 from PythonTmx.helpers import make_xml_string
 
 _logger = getLogger("PythonTmx")
@@ -691,14 +691,6 @@ class Hi(TmxElement):
     unknown_attributes: dict
     unknown_elements: MutableSequence[_Element]
     __logger = LoggerAdapter(_logger, {"ClassName": "Hi"})
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        self.__logger.debug(f"setting self.{name} to {value}")
-        return super().__setattr__(name, value)
-
-    def __getattr__(self, name: str, value: Any) -> None:
-        self.__logger.debug(f"accessing self.{name}")
-        return super().__setattr__(name, value)
 
     def __init__(
         self,

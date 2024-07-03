@@ -5,7 +5,7 @@ from typing import Any, Literal, Optional, Sequence
 
 from lxml.etree import Element, _Element
 
-from PythonTmx.base import TmxElement
+from PythonTmx.core import TmxElement
 from PythonTmx.helpers import make_xml_string
 
 logger = getLogger()
