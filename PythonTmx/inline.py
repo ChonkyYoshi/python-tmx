@@ -5,10 +5,19 @@ from typing import MutableSequence, Optional
 
 from lxml.etree import Element, _Element
 
-from PythonTmx.core import TmxElement
+from PythonTmx.core import TmxElement, TmxElements
 from PythonTmx.helpers import make_xml_string
 
 logger = getLogger("PythonTmx Logger")
+
+
+class TmxInvalidAttributeError(Exception): ...
+
+
+class TmxInvalidContentError(Exception): ...
+
+
+class TmxParseError(Exception): ...
 
 
 class Sub(TmxElement): ...
@@ -51,162 +60,154 @@ class Hi(TmxElement):
     def __init__(
         self,
         lxml_element: Optional[_Element] = None,
-        strict: bool = False,
-        **attribs,
+        **kwargs,
     ) -> None:
         """
-        Initializes a Hi object.
+        Constructs a Hi object either from parsing a lxml `_Element` object or
+        from scratch by passing it attributes and its content as keywords
+        arguments
 
-        Can be used either from scratch or by passing it a lxml `_Element`.
-        Note that it is possible to override any values parsed from the
-        lxml `_Element` by passing the desired values as a function argument.
+        Note: values passed as keyword arguments override values parsed from
+        lxml_element if it's not None.
 
-        Enabling strict mode during initialization will validate that *only*
-        attributes defined in the tmx spec are present, and that their value
-        is of the required type.
-
-        Args:
-            lxml_element (Optional[_Element], optional):
-            the lxml `_Element` to parse data from. Defaults to None.
-            strict (bool, optional): enables strict mode. Defaults to False.
-
-        Raises:
+        Keyword Arguments:
+            lxml_element {Optional[_Element]} -- A lxml `_Element` to construct
+            the object from. (default: {None})
 
         """
 
-        def set_attributes(
-            lxml_element: Optional[_Element], strict: bool, **attribs
-        ) -> None:
-            if lxml_element:
-                self.x = (
-                    lxml_element.get("x", None)
-                    if not attribs.get("x", None)
-                    else attribs.get("x", None)
-                )
-                self.type = (
-                    lxml_element.get("type", None)
-                    if not attribs.get("type", None)
-                    else attribs.get("type", None)
-                )
-            else:
-                self.x = attribs.get("x", None)
-                self.type = attribs.get("type", None)
-                try:
-                    if self.x is not None:
-                        self.x = int(self.x)
-                except (ValueError, TypeError) as e:
-                    if strict:
-                        e.add_note(
-                            "Value for attribute 'x' must be convertible to an int"
-                        )
-                        raise e
-                    logger.warning(
-                        "Value for attribute 'x' is not convertible to an int"
-                    )
-                try:
-                    assert isinstance(self.type, (str, type(None)))
-                except AssertionError:
-                    raise TypeError("Value for attribute 'type' must be a string")
+        def parse_element(lxml_element: _Element) -> None:
+            """
+            helper function for __init__ to parse a lxml_element and convert
+            the element's children to their corresponding objects if needed
 
-        def parse_element(lxml_element: _Element, strict: bool) -> None:
+            Arguments:
+                lxml_element {_Element} -- A lxml `_Element` to get content from
+
+            Raises:
+                ValueError: if an unknown or forbidden tag is found
+            """
             if lxml_element.text:
                 self.content.append(lxml_element.text)
             if len(lxml_element):
                 for child in lxml_element:
                     match child.tag:
                         case "bpt":
-                            self.content.append(Bpt(child, strict))
+                            self.content.append(Bpt(child))
                         case "ept":
-                            self.content.append(Ept(child, strict))
+                            self.content.append(Ept(child))
                         case "it":
-                            self.content.append(It(child, strict))
+                            self.content.append(It(child))
                         case "Hi":
-                            self.content.append(Hi(child, strict))
+                            self.content.append(Hi(child))
                         case "ph":
-                            self.content.append(Ph(child, strict))
+                            self.content.append(Ph(child))
                         case _:
-                            if strict:
-                                raise ValueError(
-                                    "Unknown element encountered when parsing "
-                                    f"lxml_element children. '{child.tag}' "
-                                    "elements are not allowed inside a hi element"
+                            if child.tag in (TmxElements):
+                                raise TmxParseError(
+                                    f"'{child.tag}' element is not allowed inside a hi"
                                 )
-                            logger.warning(f"ignoring unknown element '{child.tag}'")
+                            raise TmxParseError(f"Unknown element '{child.tag}' found")
                     if child.tail:
                         self.content.append(child.tail)
 
         match lxml_element:
             case None:
-                self.content = []
+                self.content = kwargs.get("content", [])
             case _Element():
-                parse_element(lxml_element, strict)
-            case _ if attribs.get("content", None):
-                self.content = attribs["content"]
-                attribs.pop("content")
+                if kwargs.get("content"):
+                    self.content = kwargs["content"]
+                else:
+                    self.content = []
+                    parse_element(lxml_element)
             case _:
                 raise TypeError(
                     "lxml_element must be of type _Element or None, "
                     f"not '{type(lxml_element).__name__}'"
                 )
-        set_attributes(lxml_element, strict, **attribs)
+
+        self.x = (
+            kwargs.get("x", None)
+            if "x" in kwargs.keys()
+            else (lxml_element.get("x", None) if lxml_element is not None else None)
+        )
+        self.type = (
+            kwargs.get("type", None)
+            if "type" in kwargs.keys()
+            else (lxml_element.get("type", None) if lxml_element is not None else None)
+        )
 
     def serialize_attributes(self) -> dict[str, str]:
         attrs: dict[str, str] = {}
-        for key in self.__attributes:
-            val = getattr(self, key, None)
-            if val is not None:
-                match key, val:
-                    case "x", int():
-                        attrs["x"] = str(val)
-                    case "x", str():
-                        try:
-                            attrs["x"] = str(int(val))
-                        except ValueError:
-                            raise ValueError(
-                                "Attribute 'x' must be convertible to an int. "
-                                "Cannot serialize attributes"
-                            )
-                    case "x", _:
-                        raise TypeError(
-                            "Unsupported type for attribute 'x'. Expected a string "
-                            f"or an int, but got {type(key).__name__}. "
-                            "Cannot serialize attributes"
-                        )
-                    case "type", str():
-                        attrs["type"] = val
-                    case "type", _:
-                        raise TypeError(
-                            "Unsupported type for attribute 'type'. "
-                            f"Expected a string but got {type(key).__name__}. "
-                            "Cannot serialize attributes"
-                        )
+        try:
+            if self.x is not None:
+                int(self.x)
+                attrs["x"] = str(self.x)
+        except ValueError as e:
+            raise TmxInvalidAttributeError(
+                "Value for attribute 'x' cannot be converted to an int."
+                f"current value: {self.x}"
+            ) from e
+        except TypeError as e:
+            raise TmxInvalidAttributeError(
+                "Type of attribute 'x' cannot be converted to an int."
+                f"current type: {type(self.x).__name__}"
+            ) from e
+        if self.type is not None:
+            if not isinstance(self.type, str):
+                raise TmxInvalidAttributeError(
+                    "Value for attribute 'type' must be a string"
+                )
+            attrs["type"] = self.type
+        if not isinstance(self.content, MutableSequence):
+            raise TmxInvalidContentError(
+                "content must be a MutableMutableSequence not "
+                f"'{type(self.content).__name__}'"
+            )
         return attrs
 
     def to_element(
         self,
     ) -> _Element:
-        hi_elem: _Element = Element(_tag="hi", attrib=self.serialize_attributes())
-        for child in self.content:
-            match child:
-                case str() if not hi_elem.text:
-                    hi_elem.text = child
-                case str() if hi_elem.text and not len(hi_elem):
-                    hi_elem.text += child
-                case str() if not hi_elem[-1].tail:
-                    hi_elem[-1].tail = child
-                case str() if hi_elem[-1].tail:
-                    hi_elem[-1].tail += child
+        if self.content is None:
+            raise TmxInvalidContentError("content cannot be None")
+        elif not isinstance(self.content, MutableSequence):
+            raise TmxInvalidContentError(
+                "content must be a non-empty MutableSequence, "
+                f"not {type(self.content).__name__}"
+            )
+        elif not len(self.content):
+            raise TmxInvalidContentError("content must be a non-empty MutableSequence")
+        lxml_element: _Element = Element(_tag="hi", attrib=self.serialize_attributes())
+        for item in self.content:
+            match item:
+                case str() if not lxml_element.text:
+                    lxml_element.text = item
+                case str() if lxml_element.text and not len(lxml_element):
+                    lxml_element.text += item
+                case str() if not lxml_element[-1].tail:
+                    lxml_element[-1].tail = item
+                case str() if lxml_element[-1].tail:
+                    lxml_element[-1].tail += item
                 case Bpt() | Ept() | It() | Ph() | Hi():
-                    hi_elem.append(child.to_element())
+                    lxml_element.append(item.to_element())
                 case _:
-                    raise TypeError(
-                        "Only strings, Bpt, Ept, It, Ph, or Hi object "
-                        "are allowed inside a hi element but "
-                        f"encountered a '{type(child).__name__}'"
+                    raise TmxInvalidContentError(
+                        f"'{type(item).__name__}'"
+                        "objects are not allowed inside a Hi object"
                     )
-        return hi_elem
+        return lxml_element
 
     def to_string(self) -> str:
+        if self.content is None:
+            raise TmxInvalidContentError("content cannot be None")
+        elif not isinstance(self.content, MutableSequence):
+            raise TmxInvalidContentError(
+                "content must be a non-empty MutableSequence, "
+                f"not {type(self.content).__name__}"
+            )
+        elif not len(self.content):
+            raise TmxInvalidContentError("content must be a non-empty MutableSequence")
         final: str = "<hi"
         final += "".join(
             [
@@ -215,20 +216,19 @@ class Hi(TmxElement):
             ]
         )
         final += ">"
-        for child in self.content:
-            match child:
+        for item in self.content:
+            match item:
                 case str():
-                    final += child
+                    final += item
                 case Bpt() | Ept() | It() | Ph() | Hi():
-                    final += child.to_string()
+                    final += item.to_string()
                 case _:
-                    raise TypeError(
-                        "Only strings, Bpt, Ept, It, Ph, or Hi object "
-                        "are allowed inside a hi element but "
-                        f"encountered '{type(child).__name__}'"
+                    raise TmxInvalidContentError(
+                        f"'{type(item).__name__}'"
+                        "objects are not allowed inside a Hi object"
                     )
         final += "</hi>"
         return final
 
 
-Hi(lxml_element=123, x=[2, 1], strict=False)
+Hi(type=13, strict=True)
