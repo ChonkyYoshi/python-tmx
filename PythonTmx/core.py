@@ -1,60 +1,80 @@
-import functools
-from enum import StrEnum, auto
-from logging import getLogger
-from typing import Protocol
+from __future__ import annotations
 
-from lxml.etree import _Element
+from typing import ClassVar, Generator, Iterable, MutableSequence, Optional, Self
 
-logger = getLogger("PythonTmx Logger")
+from PythonTmx.helpers import xml_escape
 
 
-class TmxElements(StrEnum):
-    tmx = auto()
-    header = auto()
-    prop = auto()
-    note = auto()
-    ude = auto()
-    map = auto()
-    body = auto()
-    tu = auto()
-    tuv = auto()
-    seg = auto()
-    hi = auto()
-    it = auto()
-    ph = auto()
-    bpt = auto()
-    ept = auto()
-    ut = auto()
-    sub = auto()
+class InlineElement:
+    """All the operations on a read-write sequence.
 
+    Concrete subclasses must provide __new__ or __init__,
+    __getitem__, __setitem__, __delitem__, __len__, and insert().
+    """
 
-class TmxElement(Protocol):
-    def serialize_attributes(self) -> dict[str, str]:
-        """
-        Validates and converts the attributes to a xml serializable dict
+    _content: MutableSequence[str | InlineElement]
+    _allowed_attributes: ClassVar[tuple[str, ...]]
+    _allowed_children: ClassVar[tuple[InlineElement, ...]]
 
-        Raises:
-            TmxInvalidAttributeError: raised if any attribute is of the wrong
-            type or its value is incorrect.
-            TmxInvalidContentError: raised if content is None, not a Sequence,
-            or if any item inside content is not one of the allowed types.
+    def __len__(self):
+        return len(self._content)
 
-        Returns:
-            dict[str, str] -- A tmx compliant and
-            xml serializable dict of the object's attributes
-        """
+    def __iter__(self) -> Generator[str | InlineElement, None, None]:
+        for item in self._content:
+            yield item
 
-    def to_element(self) -> _Element:
-        """
-        Serializes the object to a lxml `_Element`
+    def __getitem__(
+        self, key: int | slice
+    ) -> str | InlineElement | MutableSequence[str | InlineElement]:
+        return self._content[key]
 
-        Raises:
-            TmxInvalidContentError: raised if any item inside self.content is
-            not tmx compliant, or if content is not a non-empty Sequence.
+    def __setitem__(self, key: int, value: str | Self) -> None:
+        self._content[key] = value
 
-        Returns:
-            _Element -- the lxml `_Element` representing the object
-        """
+    def __delitem__(self, key: int | slice) -> None:
+        del self._content[key]
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, InlineElement):
+            return False
+        for attribute in self._allowed_attributes:
+            if getattr(self, attribute) != getattr(other, attribute):
+                return False
+        if len(self) != len(other):
+            return False
+        if not len(self):
+            return True
+        for i in range(len(self._content)):
+            if self._content[i] != other._content[i]:
+                return False
+        return True
+
+    def __contain__(self, item: str | InlineElement) -> bool:
+        for _item in self.iter(key=item):
+            if item == _item:
+                return True
+        return False
+
+    def iter(
+        self,
+        recursive: bool = False,
+        key: Optional[str | InlineElement | tuple[str | InlineElement]] = None,
+    ) -> Generator[str | InlineElement, None, None]:
+        for item in self._content:
+            if key is None:
+                yield item
+            else:
+                if isinstance(item, type(key)):
+                    yield item
+            if isinstance(item, InlineElement) and recursive:
+                yield from item.iter(recursive, key)
+
+    def extend(self, value: Iterable):
+        for item in value:
+            self._content.append(item)
+
+    def append(self, value: str | InlineElement):
+        self._content.append(value)
 
     def to_string(self) -> str:
         """
@@ -67,23 +87,30 @@ class TmxElement(Protocol):
         Returns:
             str -- a string representation of the object
         """
-
-
-def debug(func):
-    """
-    simple debug decorator that log the start and end of a function and
-    the value of all its args and kwargs.
-
-    used during dev
-    """
-
-    @functools.wraps(func)
-    def debug_logger(*args, **kwargs):
-        logger.debug(
-            f"starting execution of function {func.__name__}\nargs: {args}\nkwargs: {kwargs}"
-        )
-        value = func(*args, **kwargs)
-        logger.debug(f"execution of function {func.__name__} finished")
-        return value
-
-    return debug_logger
+        string: str = "<hi "
+        for attribute in self._allowed_attributes:
+            value = self.__getattribute__(attribute)
+            if value is None:
+                continue
+            string += f'{xml_escape(attribute)}="{xml_escape(value)} '
+        if not len(self):
+            return string + "/>"
+        string += ">"
+        for item in self:
+            match item:
+                case None:
+                    pass
+                case str():
+                    string += item
+                case InlineElement() if item in self._allowed_children:
+                    string += self.to_string()
+                case InlineElement():
+                    raise TypeError(
+                        f"'{type(item).__name__}' is not allowed inside this object"
+                    )
+                case _:
+                    raise TypeError(
+                        "Unexpected item encountered. Expected"
+                        f"a str or TmxElement but got '{type(item).__name__}'"
+                    )
+        return string + "</hi>"

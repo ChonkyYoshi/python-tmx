@@ -1,4 +1,4 @@
-def make_xml_string(value: str) -> str:
+def xml_escape(value: str) -> str:
     """
     simple helper to xml escape strings
     """
