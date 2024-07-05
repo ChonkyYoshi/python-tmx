@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from logging import getLogger
-from typing import MutableSequence, Optional
+from typing import MutableSequence, Optional, Self
 
-from core import TmxElement
 from lxml.etree import _Element
+
+from PythonTmx.core import InlineElement
 
 logger = getLogger("PythonTmx Logger")
 
@@ -18,22 +19,22 @@ class TmxInvalidContentError(Exception): ...
 class TmxParseError(Exception): ...
 
 
-class Sub(TmxElement): ...
+class Sub(InlineElement): ...
 
 
-class Bpt(TmxElement): ...
+class Bpt(InlineElement): ...
 
 
-class Ept(TmxElement): ...
+class Ept(InlineElement): ...
 
 
-class It(TmxElement): ...
+class It(InlineElement): ...
 
 
-class Ph(TmxElement): ...
+class Ph(InlineElement): ...
 
 
-class Hi(TmxElement):
+class Hi(InlineElement):
     """
     Delimits a section of text that has special meaning,
     such as a terminological unit, a proper name,
@@ -43,15 +44,16 @@ class Hi(TmxElement):
         None.
 
     Optional attributes:
-        x: Optional[int | str]
-        type: Optional[str]
+        x: int | str
+        type: str
 
     Contents:
         MutableSequence[str | Bpt | Ept | It | Ph | Hi]
     """
 
+    _content: MutableSequence[str | Bpt | Ept | It | Ph | Hi]
     _allowed_attributes = ("x", "type")
-    _allowed_children = ("bpt", "ept", "ph", "it", "hi")
+    _allowed_children = (Bpt, Ept, Self, It, Ph)
 
     def __init__(
         self,
@@ -110,9 +112,9 @@ class Hi(TmxElement):
         elif isinstance(lxml_element, _Element):
             for attribute in self._allowed_attributes:
                 if attribute in kwargs.keys():
-                    self.__setattr__(attribute, kwargs.get(attribute), None)
+                    self.__setattr__(attribute, kwargs.get(attribute, None))
                 else:
-                    self.__setattr__(attribute, lxml_element.get(attribute), None)
+                    self.__setattr__(attribute, lxml_element.get(attribute, None))
             if content is not None:
                 self._content = content
             else:
