@@ -1,8 +1,19 @@
 from __future__ import annotations
 
 from logging import getLogger
-from typing import MutableSequence, Optional, Self
+from typing import (
+    Any,
+    Callable,
+    Generator,
+    Literal,
+    MutableSequence,
+    Optional,
+    Protocol,
+    Self,
+)
+from xml.etree.ElementTree import Element
 
+from lxml.etree import Element as lxmlElement
 from lxml.etree import _Element
 
 from PythonTmx.core import InlineElement
@@ -34,57 +45,29 @@ class It(InlineElement): ...
 class Ph(InlineElement): ...
 
 
+class ElementLike(Protocol):
+    text: Optional[str]
+    tail: Optional[str]
+
+    def __iter__(self) -> Generator[Self, None, None]: ...
+    def get(key: str, default: Optional[Any]) -> Any: ...
+
+
 class Hi(InlineElement):
-    """
-    Delimits a section of text that has special meaning,
-    such as a terminological unit, a proper name,
-    an item that should not be modified, etc.
-
-    Required attributes:
-        None.
-
-    Optional attributes:
-        x: int | str
-        type: str
-
-    Contents:
-        MutableSequence[str | Bpt | Ept | It | Ph | Hi]
-    """
-
     _content: MutableSequence[str | Bpt | Ept | It | Ph | Hi]
-    _allowed_attributes = ("x", "type")
+    _allowed_attributes = ("x", "type", "_content")
     _allowed_children = (Bpt, Ept, Self, It, Ph)
+    x: Optional[int]
+    type: Optional[str]
 
     def __init__(
         self,
-        lxml_element: Optional[_Element] = None,
-        content: Optional[MutableSequence] = None,
+        xml_element: Optional[ElementLike] = None,
+        content: Optional[MutableSequence[str | Ph | It | Ept | Bpt | Hi]] = None,
         **kwargs,
     ) -> None:
-        """
-        Constructs a Hi object either from parsing a lxml `_Element` object or
-        from scratch by passing it attributes and its content as keywords
-        arguments
-
-        Note: values passed as keyword arguments override values parsed from
-        lxml_element if it's not None.
-
-        Keyword Arguments:
-            lxml_element {Optional[_Element]} -- A lxml `_Element` to construct
-            the object from. (default: {None})
-        """
-
         def parse_element(lxml_element: _Element) -> None:
-            """
-            helper function for __init__ to parse a lxml_element and convert
-            the element's children to their corresponding objects if needed
-
-            Arguments:
-                lxml_element {_Element} -- A lxml `_Element` to get content from
-
-            Raises:
-                ValueError: if an unknown or forbidden tag is found
-            """
+            self._content = []
             if lxml_element.text:
                 self._content.append(lxml_element.text)
             if len(lxml_element):
@@ -105,23 +88,65 @@ class Hi(InlineElement):
                     if child.tail:
                         self._content.append(child.tail)
 
-        if lxml_element is None:
-            for attribute in self._allowed_attributes:
-                self.__setattr__(attribute, kwargs.get(attribute, None))
+        if xml_element is None:
             self._content = content if content is not None else []
-        elif isinstance(lxml_element, _Element):
-            for attribute in self._allowed_attributes:
-                if attribute in kwargs.keys():
-                    self.__setattr__(attribute, kwargs.get(attribute, None))
-                else:
-                    self.__setattr__(attribute, lxml_element.get(attribute, None))
-            if content is not None:
-                self._content = content
-            else:
-                self._content = []
-                parse_element(lxml_element)
+            self.x = kwargs.get("x", None)
+            self.type = kwargs.get("type", None)
         else:
-            raise TypeError(
-                f"expected lxml_element to be an _Element not "
-                f"'{type(lxml_element).__name__}'"
+            self.x = kwargs.get("x", xml_element.get("x", None))
+            self.type = kwargs.get("type", xml_element.get("x", None))
+            self._content = (
+                content if content is not None else parse_element(xml_element)
             )
+
+    def serialize(
+        self,
+        method: Literal["str"]
+        | Literal["bytes"]
+        | Literal["lxml"]
+        | Literal["ElementTree"],
+    ) -> str | bytes | _Element | Element:
+        def _to_string() -> str:
+            elem = "<hi"
+            if self.x:
+                elem += f' x="{str(self.x)}"'
+            if self.type:
+                elem += f' type"{self.type}"'
+            elem += ">"
+            if len(self._content):
+                elem += "".join(
+                    item if isinstance(item, str) else item.serialize("str")
+                    for item in self
+                )
+            elem += "</hi>"
+            return elem
+
+        def _to_element(factory: Callable) -> _Element | Element:
+            elem = factory("hi")
+            elem.text, elem.tail = "", ""
+            if self.x:
+                elem.set("x", str(self.x))
+            if self.type:
+                elem.set("type", self.type)
+            if len(self._content):
+                for item in self._content:
+                    match item:
+                        case str() if not len(elem):
+                            elem.text += item
+                        case str():
+                            elem[-1].tail += item
+                        case _:
+                            elem.append(item.serialize(method))
+            return elem
+
+        match method:
+            case "str":
+                return _to_string()
+            case "bytes":
+                return _to_string().encode()
+            case "lxml":
+                return _to_element(factory=lxmlElement)
+            case "ElementTree":
+                return _to_element(factory=Element)
+            case _:
+                raise ValueError
