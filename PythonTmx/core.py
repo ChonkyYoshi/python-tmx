@@ -1,10 +1,29 @@
 from __future__ import annotations
 
 from pprint import pformat
-from typing import ClassVar, Generator, Iterable, Literal, MutableSequence, Optional
-from xml.etree.ElementTree import Element
+from typing import (
+    Callable,
+    ClassVar,
+    Iterable,
+    Iterator,
+    Literal,
+    MutableSequence,
+    Optional,
+    Protocol,
+)
 
-from lxml.etree import _Element
+
+class ElementLike(Protocol):
+    text: Optional[str]
+    tail: Optional[str]
+
+    def __iter__(self): ...
+    def get(self, key, default): ...
+    def set(self, key, value): ...
+    def append(self, value): ...
+    def __len__(self): ...
+    def __getitem__(self, key): ...
+    def __setitem__(self, key, value): ...
 
 
 class InlineElement:
@@ -88,16 +107,16 @@ class InlineElement:
         raise KeyError("attribute does not exist on this object")
 
     def __setattr__(self, key, value) -> None:
-        if key not in self._allowed_attributes:
-            raise KeyError("attribute is allowed on this object")
+        if key not in self._allowed_attributes and key != "_content":
+            raise KeyError(f"attribute {key} is not allowed on this object")
         self.__dict__[key] = value
 
     def set(self, key: str, value: str | int) -> None:
-        if key not in self._allowed_attributes:
-            raise KeyError("attribute is allowed on this object")
+        if key not in self._allowed_attributes and key != "_content":
+            raise KeyError(f"attribute {key} is not allowed on this object")
         setattr(self, key, value)
 
-    def items(self) -> Generator[tuple[str, int | str], None, None]:
+    def items(self) -> Iterator[tuple[str, int | str]]:
         for key in self._allowed_attributes:
             yield key, getattr(self, key)
 
@@ -111,7 +130,7 @@ class InlineElement:
         self,
         recursive: bool = False,
         key: Optional[str | InlineElement | tuple[str | InlineElement]] = None,
-    ) -> Generator[str | InlineElement, None, None]:
+    ) -> Iterator[str | InlineElement]:
         for item in self._content:
             if key is None:
                 yield item
@@ -122,5 +141,7 @@ class InlineElement:
                 yield from item.iter(recursive, key)
 
     def serialize(
-        self, method: Literal["str", "byte", "lxml", "ElementTree"]
-    ) -> str | bytes | _Element | Element: ...
+        self,
+        method: Literal["str", "bytes"] | Callable[[str], ElementLike],
+    ) -> str | bytes | ElementLike:
+        return NotImplemented
