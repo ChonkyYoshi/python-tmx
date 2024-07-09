@@ -28,7 +28,8 @@ class ElementLike(Protocol):
 
 class InlineElement:
     _content: MutableSequence
-    _allowed_attributes: ClassVar[tuple]
+    _allowed_attributes: ClassVar[tuple[str, ...]]
+    _allowed_children = ClassVar[tuple[str, ...]]
 
     def __repr__(self):
         attr_dict = {key: getattr(self, key, None) for key in self._allowed_attributes}
@@ -140,8 +141,95 @@ class InlineElement:
             if isinstance(item, InlineElement) and recursive:
                 yield from item.iter(recursive, key)
 
+    def serialize_attrs(self) -> dict[str, str]:
+        raise NotImplementedError
+
     def serialize(
         self,
-        method: Literal["str", "bytes"] | Callable[[str], ElementLike],
+        factory: Literal["str", "bytes"] | Callable[[str], ElementLike],
     ) -> str | bytes | ElementLike:
-        return NotImplemented
+        def _to_string() -> str:
+            elem = f"<{self.__class__.__name__.lower()} "
+            elem += " ".join(
+                f'{key}="{val}"' for key, val in self.serialize_attrs().items()
+            )
+            elem += ">"
+            if len(self._content):
+                bpt_count, ept_count = 0, 0
+                for item in self._content:
+                    match item:
+                        case str():
+                            elem += item
+                        case InlineElement() if item.__class__.__name__ in self._allowed_children:  # type: ignore
+                            if item.__class__.__name__ == "Bpt":
+                                bpt_count += 1
+                            if item.__class__.__name__ == "Ept":
+                                ept_count += 1
+                            elem += item.serialize(factory="str")  # type: ignore
+                        case _:
+                            raise TypeError(
+                                f"{type(item).__name__} is not allowed in a hi element"
+                            )
+            match bpt_count - ept_count:
+                case 0:
+                    pass
+                case 1:
+                    raise ValueError("One bpt element is missing its ept counterpart")
+                case n if n > 1:
+                    raise ValueError(
+                        f"{n} bpt elements are missing their ept counterpart"
+                    )
+                case -1:
+                    raise ValueError("One ept element is missing its bpt counterpart")
+                case n if n < 1:
+                    raise ValueError(
+                        f"{n} ept elements are missing their bpt counterpart"
+                    )
+            elem += f"</{self.__class__.__name__.lower()}>"
+            return elem
+
+        def _to_element(factory: Callable[[str], ElementLike]) -> ElementLike:
+            elem = factory(self.__class__.__name__.lower())
+            elem.text, elem.tail = "", ""
+            for key, val in self.serialize_attrs().items():
+                elem.set(key, val)
+            if len(self._content):
+                bpt_count, ept_count = 0, 0
+                for item in self._content:
+                    match item:
+                        case str() if not len(elem):
+                            elem.text += item
+                        case str():
+                            elem[-1].tail += item
+                        case InlineElement() if item.__class__.__name__ in self._allowed_children:  # type: ignore
+                            if item.__class__.__name__ == "Bpt":
+                                bpt_count += 1
+                            if item.__class__.__name__ == "Ept":
+                                ept_count += 1
+                            elem.append(item.serialize(factory))
+                        case _:
+                            raise TypeError(
+                                f"{type(item).__name__} is not allowed in a hi element"
+                            )
+            match bpt_count - ept_count:
+                case 1:
+                    raise ValueError("One bpt element is missing its ept counterpart")
+                case n if n > 1:
+                    raise ValueError(
+                        f"{n} bpt elements are missing their ept counterpart"
+                    )
+                case -1:
+                    raise ValueError("One ept element is missing its bpt counterpart")
+                case n if n < 1:
+                    raise ValueError(
+                        f"{n} ept elements are missing their bpt counterpart"
+                    )
+            return elem
+
+        match factory:
+            case "str":
+                return _to_string()
+            case "bytes":
+                return _to_string().encode()
+            case func if callable(func):
+                return _to_element(factory=func)
