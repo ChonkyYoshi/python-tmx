@@ -7,19 +7,20 @@ from typing import (
     Optional,
 )
 
-from PythonTmx.core import ElementLike, InlineElement
+from PythonTmx.core import ElementLike, TmxElement
 
 logger = getLogger("PythonTmx Logger")
 
 
-class Sub(InlineElement):
+class Sub(TmxElement):
     _content: MutableSequence[str | Ph | It | Ept | Bpt | Hi]
     _allowed_attributes = (
         "datatype",
         "type",
     )
     _allowed_children = ("Ph", "It", "Ept", "Bpt", "Hi")
-    i: Optional[int]
+    type: Optional[str]
+    dataype: Optional[str]
 
     def __init__(
         self,
@@ -51,15 +52,13 @@ class Sub(InlineElement):
                     if child.tail:
                         self._content.append(child.tail)
 
+        super().__init__(xml_element, **kwargs)
         if xml_element is None:
-            self._content = content if content is not None else []
-            self.x = kwargs.get("x", None)
-            self.type = kwargs.get("type", None)
-            self.i = kwargs.get("i", None)
+            if content:
+                self._content = content
+            else:
+                self._content = []
         else:
-            self.x = kwargs.get("x", xml_element.get("x", None))
-            self.type = kwargs.get("type", xml_element.get("type", None))
-            self.i = kwargs.get("i", xml_element.get("i", None))
             if content:
                 self._content = content
             else:
@@ -67,16 +66,6 @@ class Sub(InlineElement):
 
     def serialize_attrs(self) -> dict[str, str]:
         attr_dict: dict[str, str] = dict()
-        if self.i is None:
-            raise AttributeError("Attribute 'i' is required")
-        try:
-            val = int(self.i)
-            attr_dict["i"] = str(val)
-        except ValueError:
-            raise ValueError(
-                f"attribute 'i' must be a number but {val} "
-                "cannot be converted to an int"
-            )
         if self.type is not None:
             if not isinstance(self.type, str):
                 raise TypeError(
@@ -84,23 +73,21 @@ class Sub(InlineElement):
                     f"'{type(self.type).__name__}'"
                 )
             attr_dict["type"] = self.type
-        if self.x is not None:
-            try:
-                val = int(self.x)
-                attr_dict["x"] = str(val)
-            except ValueError:
-                raise ValueError(
-                    f"attribute 'x' must be a number but {val} "
-                    "cannot be converted to an int"
+        if self.dataype is not None:
+            if not isinstance(self.type, str):
+                raise TypeError(
+                    "attribute 'dataype' must be a str but got "
+                    f"'{type(self.dataype).__name__}'"
                 )
+            attr_dict["dataype"] = self.dataype
         return attr_dict
 
 
-class Ept(InlineElement):
+class Ept(TmxElement):
     _content: MutableSequence[str | Sub]
     _allowed_attributes = ("i",)
     _allowed_children = ("Sub",)
-    i: Optional[int]
+    i: Optional[int]  # type:ignore
 
     def __init__(
         self,
@@ -122,11 +109,13 @@ class Ept(InlineElement):
                     if child.tail:
                         self._content.append(child.tail)
 
+        super().__init__(xml_element, **kwargs)
         if xml_element is None:
-            self._content = content if content is not None else []
-            self.i = kwargs.get("i", None)
+            if content:
+                self._content = content
+            else:
+                self._content = []
         else:
-            self.i = kwargs.get("i", xml_element.get("i", None))
             if content:
                 self._content = content
             else:
@@ -147,11 +136,13 @@ class Ept(InlineElement):
         return attr_dict
 
 
-class Bpt(InlineElement):
+class Bpt(TmxElement):
     _content: MutableSequence[str | Sub]
     _allowed_attributes = ("x", "type", "i")
     _allowed_children = ("Sub",)
-    i: Optional[int]
+    i: Optional[int]  # type:ignore
+    x: Optional[int]  # type:ignore
+    type: Optional[str]
 
     def __init__(
         self,
@@ -173,15 +164,13 @@ class Bpt(InlineElement):
                     if child.tail:
                         self._content.append(child.tail)
 
+        super().__init__(xml_element, **kwargs)
         if xml_element is None:
-            self._content = content if content is not None else []
-            self.x = kwargs.get("x", None)
-            self.type = kwargs.get("type", None)
-            self.i = kwargs.get("i", None)
+            if content:
+                self._content = content
+            else:
+                self._content = []
         else:
-            self.x = kwargs.get("x", xml_element.get("x", None))
-            self.type = kwargs.get("type", xml_element.get("type", None))
-            self.i = kwargs.get("i", xml_element.get("i", None))
             if content:
                 self._content = content
             else:
@@ -218,11 +207,11 @@ class Bpt(InlineElement):
         return attr_dict
 
 
-class It(InlineElement):
+class It(TmxElement):
     _content: MutableSequence[str | Sub]
     _allowed_attributes = ("x", "type", "pos")
     _allowed_children = ("Sub",)
-    x: Optional[int]
+    x: Optional[int]  # type:ignore
     type: Optional[str]
     pos: Optional[Literal["begin", "end"]]
 
@@ -246,15 +235,13 @@ class It(InlineElement):
                     if child.tail:
                         self._content.append(child.tail)
 
+        super().__init__(xml_element, **kwargs)
         if xml_element is None:
-            self._content = content if content is not None else []
-            self.x = kwargs.get("x", None)
-            self.type = kwargs.get("type", None)
-            self.pos = kwargs.get("pos", None)
+            if content:
+                self._content = content
+            else:
+                self._content = []
         else:
-            self.x = kwargs.get("x", xml_element.get("x", None))
-            self.type = kwargs.get("type", xml_element.get("type", None))
-            self.pos = kwargs.get("pos", xml_element.get("pos", None))
             if content:
                 self._content = content
             else:
@@ -293,11 +280,11 @@ class It(InlineElement):
         return attr_dict
 
 
-class Ph(InlineElement):
+class Ph(TmxElement):
     _content: MutableSequence[str | Sub]
     _allowed_attributes = ("x", "type", "assoc")
     _allowed_children = ("Sub",)
-    x: Optional[int]
+    x: Optional[int]  # type:ignore
     type: Optional[str]
     assoc: Optional[Literal["p", "f", "b"]]
 
@@ -321,15 +308,13 @@ class Ph(InlineElement):
                     if child.tail:
                         self._content.append(child.tail)
 
+        super().__init__(xml_element, **kwargs)
         if xml_element is None:
-            self._content = content if content is not None else []
-            self.x = kwargs.get("x", None)
-            self.type = kwargs.get("type", None)
-            self.assoc = kwargs.get("assoc", None)
+            if content:
+                self._content = content
+            else:
+                self._content = []
         else:
-            self.x = kwargs.get("x", xml_element.get("x", None))
-            self.type = kwargs.get("type", xml_element.get("type", None))
-            self.assoc = kwargs.get("assoc", xml_element.get("assoc", None))
             if content:
                 self._content = content
             else:
@@ -368,11 +353,11 @@ class Ph(InlineElement):
         return attr_dict
 
 
-class Hi(InlineElement):
+class Hi(TmxElement):
     _content: MutableSequence[str | Bpt | Ept | It | Ph | Hi]
     _allowed_attributes = ("x", "type")
     _allowed_children = ("Bpt", "Ept", "Self", "It", "Ph")
-    x: Optional[int]
+    x: Optional[int]  # type:ignore
     type: Optional[str]
 
     def __init__(
@@ -403,13 +388,13 @@ class Hi(InlineElement):
                     if child.tail:
                         self._content.append(child.tail)
 
+        super().__init__(xml_element, **kwargs)
         if xml_element is None:
-            self._content = content if content is not None else []
-            self.x = kwargs.get("x", None)
-            self.type = kwargs.get("type", None)
+            if content:
+                self._content = content
+            else:
+                self._content = []
         else:
-            self.x = kwargs.get("x", xml_element.get("x", None))
-            self.type = kwargs.get("type", xml_element.get("type", None))
             if content:
                 self._content = content
             else:
