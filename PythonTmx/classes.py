@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Iterable, Literal, MutableSequence, Optional
+from io import BytesIO, StringIO
+from os import PathLike
+from typing import Iterable, Literal, MutableSequence, Optional, override
 
-from lxml.etree import _Element
+from lxml.etree import Element, ElementTree, _Element
 
 from PythonTmx.core import ExtraTailError, ExtraTextError, TmxAttributes, TmxElement
 
@@ -484,7 +486,7 @@ class Tuv(TmxElement):
         TmxAttributes.changeid,
         TmxAttributes.otmf,
     )
-    _allowed_content = (Ude,)
+    _allowed_content = (Seg,)
     xmllang: Optional[str]
     oencoding: Optional[str]
     datatype: Optional[str]
@@ -577,7 +579,7 @@ class Tu(TmxElement):
         TmxAttributes.otmf,
         TmxAttributes.srclang,
     )
-    _allowed_content = (Ude,)
+    _allowed_content = (Tuv,)
     tuid: Optional[str]
     xmllang: Optional[str]
     oencoding: Optional[str]
@@ -660,7 +662,7 @@ class Tu(TmxElement):
 
 
 class Tmx(TmxElement):
-    _allowed_content = (Tuv,)
+    _allowed_content = (Tu,)
     _required_attributes = (TmxAttributes.version,)
     _optional_attributes = tuple()
     version: str = "1.4"
@@ -683,9 +685,9 @@ class Tmx(TmxElement):
                     if item.tag == "body":
                         for tu in item:
                             if tu.tag == "tu":
-                                self.content.append(Tu(item))
+                                self.content.append(Tu(tu))
                     if item.tag == "header":
-                        self.content.append(Header(item))
+                        self.header = Header(item)
             else:
                 if content is not None:
                     self.content.extend(content)
@@ -693,3 +695,18 @@ class Tmx(TmxElement):
                         self.header = header
                     else:
                         self.header = Header()
+
+    @override
+    def to_element(self) -> _Element:
+        elem = Element("tmx", version=self.version)
+        elem.append(self.header.to_element())
+        body = Element("body")
+        elem.append(body)
+        for tu in self.content:
+            body.append(tu.to_element())
+        return elem
+
+    def export_to_file(self, file: str | bytes | PathLike | StringIO | BytesIO) -> None:
+        ElementTree(self.to_element()).write(
+            file, encoding=self.header.oencoding, xml_declaration=True
+        )
