@@ -1,59 +1,39 @@
-from typing import Optional
+from typing import Optional, overload
 
 from lxml.etree import _Element
 
-from PythonTmx.core import BaseElement
+from PythonTmx.core import TmxAttributes, TmxElement
 
 
-class Prop(BaseElement):
-    content: str
+class Prop(TmxElement):
     type: str
     xmllang: Optional[str]
     oencoding: Optional[str]
+    _attributes = (TmxAttributes.type, TmxAttributes.xmllang, TmxAttributes.oencoding)
 
-    def __init__(
-        self,
-        *,
-        lxml_element: Optional[_Element] = None,
-        content: Optional[str] = None,
-        type: Optional[str] = None,
-        xmllang: Optional[str] = None,
-        oencoding: Optional[str] = None,
-    ) -> None:
-        match lxml_element:
-            case _Element():
-                self.content = (
-                    lxml_element.text
-                    if lxml_element.text is not None
-                    else content
-                    if content is not None
-                    else ""
-                )
-                self.type = lxml_element.get("type", type if type is not None else "")
-                self.xmllang = lxml_element.get("xml:lang", xmllang)
-                self.oencoding = lxml_element.get("o-encoding", oencoding)
-            case None:
-                self.content = content if content is not None else ""
-                self.type = type if type is not None else ""
-                self.xmllang = xmllang
-                self.oencoding = oencoding
-            case _:
-                raise TypeError(
-                    f"Expected an lxml '_Element' object but got '{lxml_element.__class__.__name__}'"
-                )
+    @overload
+    def __init__(self, *, source_element: _Element | None = None, **kwargs) -> None: ...
+    @overload
+    def __init__(self, *, content: str | None = None, **kwargs) -> None: ...
+    @overload
+    def __init__(self, *, type: str = "unknown", **kwargs) -> None: ...
+    @overload
+    def __init__(self, *, xmllang: str | None = None, **kwargs) -> None: ...
+    @overload
+    def __init__(self, *, oencoding: str | None = None, **kwargs) -> None: ...
 
-    def __len__(self) -> int:
-        return len(self.content)
-
-    def validate(self) -> None:
-        for attribute in ("content", "xmllang", "oencoding", "type"):
-            value = getattr(self, attribute)
-            match attribute, value:
-                case "type", None:
-                    raise AttributeError("required attribute missing")
-                case "content", None:
-                    raise AttributeError("content missing")
-                case _, None:
-                    continue
-                case _:
-                    raise TypeError
+    def __init__(self, **kwargs) -> None:
+        source_element: Optional[_Element] = kwargs.get("source_element", None)
+        self.content: list = []
+        if source_element is not None:
+            for attribute in self._attributes:
+                element_value: Optional[str] = source_element.get(attribute.value)
+                if element_value is None:
+                    self.__setattr__(attribute.name, kwargs.get(attribute.name, None))
+                else:
+                    self.__setattr__(attribute.name, element_value)
+            if source_element.text is not None:
+                self.content.append(source_element.text)
+            else:
+                if kwargs.get("content") is not None:
+                    self.content.append(kwargs["content"])
