@@ -16,7 +16,43 @@ from PythonTmx.core.inline import Bpt, Ept, Hi, It, Ph, Sub, Ut
 __all__ = ["Header", "Seg", "Tmx", "Tu", "Tuv", "Prop", "Note", "Map", "Ude"]
 
 
-class Prop(TmxElement):
+class Prop:
+    """
+    <prop>
+
+    Property - The `Prop` element is used to define the various properties of
+    its parent element (or of the document when used in the `Header` element).
+    These properties are not defined by the standard.
+
+    As the tool parsing the tmx file is fully responsible for handling
+    the content of a `Prop` element you can use it in any way you wish.
+    For example the content can be a list of instructions your tool can parse,
+    not only a simple text.
+
+    It is the responsibility of each tool provider to publish the types and
+    values of the properties it uses. If the tool exports unpublished
+    properties types, their values should begin with the prefix "x-".
+
+    Required attributes:
+        * type: str -- the kind of data the element represents.
+
+    Optional attributes:
+        * xmllang: str -- the locale of the element's content.
+        A language code as described in the [RFC 3066].
+        This declared value is considered to apply to all elements within
+        the content of the element where it is specified, unless overridden
+        with another instance of the xml:lang attribute.
+        Unlike the other TMX attributes, the values for xml:lang are not
+        case-sensitive.
+        Note: PythonTmx currently DOES NOT checks that the value for xmllang is
+        a correct language code. If you want this feature, please open an issue
+        on GitHub.
+        * oencoding str -- the original or preferred code set of the data
+
+    Contents: a str
+    """
+
+    content: str
     type: str
     xmllang: Optional[str]
     oencoding: Optional[str]
@@ -27,59 +63,138 @@ class Prop(TmxElement):
     def __init__(
         self,
         source_element: Optional[_Element] = None,
-        content: Optional[str] = None,
+        content: str = "",
         type: Optional[str] = None,
         xmllang: Optional[str] = None,
         oencoding: Optional[str] = None,
     ) -> None:
-        super().__init__(
-            source_element=source_element,
-            type=type,
-            xmllang=xmllang,
-            oencoding=oencoding,
-        )
-        if source_element is not None:
-            if source_element.text:
-                self.content += source_element.text
-            elif content is not None:
-                self.content += content
+        for attribute in (*self._required_attributes, *self._optional_attributes):
+            match attribute:
+                case TmxAttributes.type:
+                    if source_element is not None:
+                        self.__setattr__(
+                            attribute.name,
+                            source_element.get(attribute.value, type),
+                        )
+                case TmxAttributes.xmllang:
+                    if source_element is not None:
+                        self.__setattr__(
+                            attribute.name,
+                            source_element.get(attribute.value, xmllang),
+                        )
+                case TmxAttributes.oencoding:
+                    if source_element is not None:
+                        self.__setattr__(
+                            attribute.name,
+                            source_element.get(attribute.value, oencoding),
+                        )
+        if source_element is not None and source_element.text:
+            self.content += source_element.text
+        else:
+            self.content = content
+        self.xml_attrib = TmxElement.xml_attrib
+        self.to_element = TmxElement.to_element
+        self.iter_element = TmxElement.iter_element
+        self.iter_text = TmxElement.iter_text
 
 
-class Note(TmxElement):
+class Note:
+    """
+    <note>
+
+    Note - The `Note` element is used for comments.
+
+    Required attributes: None.
+
+    Optional attributes:
+        * xmllang: str -- the locale of the element's content.
+        A language code as described in the [RFC 3066].
+        This declared value is considered to apply to all elements within
+        the content of the element where it is specified, unless overridden
+        with another instance of the xml:lang attribute.
+        Unlike the other TMX attributes, the values for xml:lang are not
+        case-sensitive.
+        Note: PythonTmx currently DOES NOT checks that the value for xmllang is
+        a correct language code. If you want this feature, please open an issue
+        on GitHub.
+        * oencoding str -- the original or preferred code set of the data
+
+    Contents: a str
+    """
+
+    content: str
     xmllang: Optional[str]
     oencoding: Optional[str]
-    _required_attributes = tuple()
+    _required_attributes: tuple = tuple()
     _optional_attributes = TmxAttributes.xmllang, TmxAttributes.oencoding
     _allowed_content = (str,)
 
     def __init__(
         self,
         source_element: Optional[_Element] = None,
-        content: Optional[str] = None,
+        content: str = "",
         xmllang: Optional[str] = None,
         oencoding: Optional[str] = None,
     ) -> None:
-        super().__init__(
-            source_element=source_element,
-            content=content,
-            xmllang=xmllang,
-            oencoding=oencoding,
-        )
-        if source_element is not None:
-            if source_element.text:
-                self.content += source_element.text
-            elif content is not None:
-                self.content += content
+        for attribute in (*self._required_attributes, *self._optional_attributes):
+            match attribute:
+                case TmxAttributes.xmllang:
+                    if source_element is not None:
+                        self.__setattr__(
+                            attribute.name,
+                            source_element.get(attribute.value, xmllang),
+                        )
+                case TmxAttributes.oencoding:
+                    if source_element is not None:
+                        self.__setattr__(
+                            attribute.name,
+                            source_element.get(attribute.value, oencoding),
+                        )
+        if source_element is not None and source_element.text:
+            self.content += source_element.text
+        else:
+            self.content = content
+        self.xml_attrib = TmxElement.xml_attrib
+        self.to_element = TmxElement.to_element
+        self.iter_element = TmxElement.iter_element
+        self.iter_text = TmxElement.iter_text
 
 
-class Map(TmxElement):
+class Map:
+    """
+    <map/>
+
+    Map - The `Map` element is used to specify a user-defined character and
+    some of its properties.
+
+    Required attributes:
+        * unicode: str --  Unicode character value of a <map/> element.
+        Its value must be a valid Unicode value (including values in the
+        Private Use areas) in hexadecimal format. For example: unicode="#xF8FF".
+
+    Optional attributes:
+        * code: str -- The code-point value corresponding to the unicode
+        character of a given `Map` element. A Hexadecimal value prefixed with
+        "#x". For example: code="#x9F".
+        * ent: str -- the entity name of the character of a given `Map` element
+        * subst: str -- an alternative string for the character defined in a
+        given `Map` element
+
+    Note: at least one of the optional attributes should be specified.
+    If the code attribute is specified, the parent `Ude` element must specify
+    a base attribute.
+
+    Contents: None
+    """
+
+    content = None
     unicode: str
     code: Optional[str]
     ent: Optional[str]
     subst: Optional[str]
     _required_attributes = (TmxAttributes.unicode,)
     _optional_attributes = TmxAttributes.code, TmxAttributes.ent, TmxAttributes.subst
-    _allowed_content = tuple()
+    _allowed_content: tuple = tuple()
 
     def __init__(
         self,
@@ -89,18 +204,41 @@ class Map(TmxElement):
         ent: Optional[str] = None,
         subst: Optional[str] = None,
     ) -> None:
-        super().__init__(
-            source_element=source_element,
-            unicode=unicode,
-            code=code,
-            ent=ent,
-            subst=subst,
-        )
+        for attribute in (*self._required_attributes, *self._optional_attributes):
+            match attribute:
+                case TmxAttributes.unicode:
+                    if source_element is not None:
+                        self.__setattr__(
+                            attribute.name,
+                            source_element.get(attribute.value, unicode),
+                        )
+                case TmxAttributes.code:
+                    if source_element is not None:
+                        self.__setattr__(
+                            attribute.name,
+                            source_element.get(attribute.value, code),
+                        )
+                case TmxAttributes.ent:
+                    if source_element is not None:
+                        self.__setattr__(
+                            attribute.name,
+                            source_element.get(attribute.value, ent),
+                        )
+                case TmxAttributes.subst:
+                    if source_element is not None:
+                        self.__setattr__(
+                            attribute.name,
+                            source_element.get(attribute.value, subst),
+                        )
         if source_element is not None:
             if source_element.text:
                 raise ExtraTextError("map", source_element.text)
             if source_element.tail:
                 raise ExtraTailError("map", source_element.tail)
+        self.xml_attrib = TmxElement.xml_attrib
+        self.to_element = TmxElement.to_element
+        self.iter_element = TmxElement.iter_element
+        self.iter_text = TmxElement.iter_text
 
 
 class Ude(TmxElement):

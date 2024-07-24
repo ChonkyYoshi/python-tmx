@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Generator, Optional, Type
+from typing import Iterator, Optional, Type
 
 from lxml.etree import Element, _Element
 
@@ -64,7 +64,7 @@ class TmxtagError(Exception):
 
 
 class TmxElement:
-    content: list[TmxElement | str]
+    content: list
     _required_attributes: tuple[TmxAttributes, ...]
     _optional_attributes: tuple[TmxAttributes, ...]
     _allowed_content: tuple[Type, ...]
@@ -91,14 +91,27 @@ class TmxElement:
                 self.__setattr__(attribute.name, kwargs.get(attribute.name, None))
 
     def xml_attrib(self) -> dict[str, str]:
+        """
+        Validates that an elements has all its required attributes,
+        check that the values are strings or an accepted alternative
+        and returns a dict ready to be used as an lxml Element attrib dict.
+
+        Raises TmxError if:
+            * a required attribute has a value of None.
+            * an attribute with restricted value (e.g. segtype) has an
+            incorrect value.
+            * the attribute is not a string or an accepted alternative.
+
+        Returns a dict of the element's attributes ready to be serialized by lxml
+        """
         xml_attributes: dict[str, str] = dict()
         for attribute in (*self._required_attributes, *self._optional_attributes):
             value = self.__getattribute__(attribute.name)
             if value is None:
                 if attribute.name in self._required_attributes:
-                    raise ValueError(
+                    raise TmxError(
                         f"Required attribute {attribute.name} is missing from element {self.__class__.__name__}"
-                    )
+                    ) from AttributeError
                 else:
                     continue
             match attribute:
@@ -172,6 +185,27 @@ class TmxElement:
                         raise TmxError(
                             f"Value for attribute {attribute.name} must be a str and one of block, paragraph, sentence or phrase but got {value} of type '{value.__class__.__name__}'"
                         ) from e
+                case TmxAttributes.unicode:
+                    try:
+                        if not isinstance(value, str):
+                            raise TypeError(
+                                f"Expected a str but got '{value.__class__.__name__}'"
+                            )
+                        if (
+                            getattr(self, "code") is None
+                            and getattr(self, "ent") is None
+                            and getattr(self, "subst") is None
+                        ):
+                            raise ValueError(
+                                "At least one the optional attributes must be set"
+                            )
+                        xml_attributes[attribute.value] = value
+                    except TypeError as e:
+                        raise TmxError(
+                            f"Value for attribute {attribute.name} must be a str and at least one the optional attributes must be set but got {value} of type '{value.__class__.__name__}'"
+                        ) from e
+                    except ValueError as e:
+                        raise TmxError(*e.args) from e
                 case _:
                     try:
                         if not isinstance(value, str):
@@ -186,6 +220,18 @@ class TmxElement:
         return xml_attributes
 
     def to_element(self) -> _Element:
+        """
+        Converts a tmx element to a valid lxml element.
+
+        Raises a TmxError if:
+            * the element contains unauthorized children (e.g. Ude elements in
+            a Tu element)
+            * The element has an imbalanced count of Ept and Bpt elements
+            * an Ude element doesn't have a base attribute when one of its Map
+            elements has a 'code' attribute
+
+        Returns an lxml element that represents that tmx element
+        """
         elem = Element(self.__class__.__name__.lower(), self.xml_attrib())
         bpt, ept = 0, 0
         base, code = False, False
@@ -196,6 +242,9 @@ class TmxElement:
         if hasattr(self, "notes"):
             for note in self.notes:
                 elem.append(note.to_element())
+        if isinstance(self.content, str):
+            elem.text = self.content
+            return elem
         for item in self.content:
             match item:
                 case x if type(x) not in self._allowed_content:
@@ -234,7 +283,11 @@ class TmxElement:
             )
         return elem
 
-    def iter_text(self) -> Generator[str, None, None]:
+    def iter_text(self) -> Iterator[str]:
+        """
+        Opposite of iter_element, recursively iterates over an element and yields
+        any str
+        """
         if isinstance(self.content, str):
             yield self.content
         else:
@@ -244,9 +297,13 @@ class TmxElement:
                 else:
                     yield from item.iter_text()
 
-    def iter(
+    def iter_element(
         self,
-    ) -> Generator[TmxElement, None, None]:
+    ) -> Iterator[TmxElement]:
+        """
+        Opposite of iter_text, recursively iterates over an element and
+        yields all Tmx elements it finds.
+        """
         if isinstance(self.content, str):
             pass
         else:
