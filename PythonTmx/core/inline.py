@@ -1,4 +1,4 @@
-from typing import Literal, Optional, Self
+from typing import Any, Generator, Literal, MutableSequence, Optional, Self, Type
 
 from lxml.etree import _Element
 
@@ -7,7 +7,8 @@ from PythonTmx.core.base import TmxAttributes, TmxElement
 __all__ = ["Bpt", "Ept", "Hi", "It", "Ph", "Sub", "Ut"]
 
 
-class Sub(TmxElement): ...
+class Sub(TmxElement):
+    def iter(self): ...
 
 
 class Bpt(TmxElement):
@@ -19,10 +20,12 @@ class Bpt(TmxElement):
     Each `Bpt` has a corresponding `Ept` element within the element it's in.
 
     Required attributes:
+    ----
         * i: int | str -- used to pair a `Bpt` elements with `Ept` elements.
         Provides support to markup a possibly overlapping range of codes.
 
     Optional attributes:
+    ----
         * x: int | str -- used to pair elements between each `Tuv` element
         of a given `Tu` element.
         Facilitates the pairing of allied codes in source and target text,
@@ -34,7 +37,7 @@ class Bpt(TmxElement):
     Contents: A list of strings and `Sub` elements
     """
 
-    content: list[Sub | str]
+    _content: MutableSequence[Sub | str]
     _allowed_content = Sub, str
     _required_attributes = (TmxAttributes.i,)
     _optional_attributes = TmxAttributes.x, TmxAttributes.type
@@ -45,7 +48,7 @@ class Bpt(TmxElement):
     def __init__(
         self,
         source_element: Optional[_Element] = None,
-        content: Optional[list[Sub | str]] = None,
+        content: Optional[MutableSequence[Sub | str]] = None,
         i: Optional[str | int] = None,
         x: Optional[str | int] = None,
         type: Optional[str] = None,
@@ -58,14 +61,24 @@ class Bpt(TmxElement):
         )
         if source_element is not None:
             if source_element.text:
-                self.content.append(source_element.text)
+                self._content.append(source_element.text)
             if len(source_element):
                 for item in source_element:
-                    self.content.append(Sub(source_element=item))
+                    self._content.append(Sub(source_element=item))
                     if item.tail:
-                        self.content.append(item.tail)
+                        self._content.append(item.tail)
         elif content is not None:
-            self.content.extend(content)
+            self._content.extend(content)
+
+    def iter(
+        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
+    ) -> Generator[TmxElement | str, None, None]:
+        for item in self._content:
+            if isinstance(item, str):
+                if str in mask:
+                    yield item
+            else:
+                yield from item.iter(mask)
 
 
 class Ept(TmxElement):
@@ -77,15 +90,17 @@ class Ept(TmxElement):
     Each `Ept` has a corresponding `Bpt` element within the element it's in.
 
     Required attributes:
+    ----
         * i: int | str -- used to pair a `Bpt` elements with `Ept` elements.
         Provides support to markup a possibly overlapping range of codes.
 
-    Optional attributes: None
+    Optional attributes:
+    ---- None
 
     Contents: A list of strings and `Sub` elements
     """
 
-    content: list[Sub | str]
+    _content: MutableSequence[Sub | str]
     _allowed_content = Sub, str
     _required_attributes = (TmxAttributes.i,)
     _optional_attributes = tuple()
@@ -94,7 +109,7 @@ class Ept(TmxElement):
     def __init__(
         self,
         source_element: Optional[_Element] = None,
-        content: Optional[list[Sub | str]] = None,
+        content: Optional[MutableSequence[Sub | str]] = None,
         i: Optional[str | int] = None,
     ) -> None:
         super().__init__(
@@ -103,14 +118,24 @@ class Ept(TmxElement):
         )
         if source_element is not None:
             if source_element.text:
-                self.content.append(source_element.text)
+                self._content.append(source_element.text)
             if len(source_element):
                 for item in source_element:
-                    self.content.append(Sub(source_element=item))
+                    self._content.append(Sub(source_element=item))
                     if item.tail:
-                        self.content.append(item.tail)
+                        self._content.append(item.tail)
         elif content is not None:
-            self.content.extend(content)
+            self._content.extend(content)
+
+    def iter(
+        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
+    ) -> Generator[TmxElement | str, None, None]:
+        for item in self._content:
+            if isinstance(item, str):
+                if str in mask:
+                    yield item
+            else:
+                yield from item.iter(mask)
 
 
 class It(TmxElement):
@@ -122,9 +147,11 @@ class It(TmxElement):
     ending/beginning within the segment.
 
     Required attributes:
+    ----
         * pos: "begin" | "end" -- whether this is a beginning or ending tag
 
     Optional attributes:
+    ----
         * x: int | str -- used to pair elements between each `Tuv` element
         of a given `Tu` element.
         Facilitates the pairing of allied codes in source and target text,
@@ -136,7 +163,7 @@ class It(TmxElement):
     Contents: A list of strings and `Sub` elements
     """
 
-    content: list[Sub | str]
+    _content: MutableSequence[Sub | str]
     _allowed_content = Sub, str
     _required_attributes = (TmxAttributes.pos,)
     _optional_attributes = TmxAttributes.x, TmxAttributes.type
@@ -147,7 +174,7 @@ class It(TmxElement):
     def __init__(
         self,
         source_element: Optional[_Element] = None,
-        content: Optional[list[Sub | str]] = None,
+        content: Optional[MutableSequence[Sub | str]] = None,
         pos: Optional[Literal["begin", "end"]] = None,
         x: Optional[str | int] = None,
         type: Optional[str] = None,
@@ -160,14 +187,24 @@ class It(TmxElement):
         )
         if source_element is not None:
             if source_element.text:
-                self.content.append(source_element.text)
+                self._content.append(source_element.text)
             if len(source_element):
                 for item in source_element:
-                    self.content.append(Sub(source_element=item))
+                    self._content.append(Sub(source_element=item))
                     if item.tail:
-                        self.content.append(item.tail)
+                        self._content.append(item.tail)
         elif content is not None:
-            self.content.extend(content)
+            self._content.extend(content)
+
+    def iter(
+        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
+    ) -> Generator[TmxElement | str, None, None]:
+        for item in self._content:
+            if isinstance(item, str):
+                if str in mask:
+                    yield item
+            else:
+                yield from item.iter(mask)
 
 
 class Ph(TmxElement):
@@ -177,9 +214,11 @@ class Ph(TmxElement):
     Placeholder - The `Ph` element is used to delimit a sequence of native
     standalone codes in the segment.
 
-    Required attributes: None
+    Required attributes:
+    ---- None
 
     Optional attributes:
+    ----
         * x: int | str -- used to pair elements between each `Tuv` element
         of a given `Tu` element.
         Facilitates the pairing of allied codes in source and target text,
@@ -196,7 +235,7 @@ class Ph(TmxElement):
     Contents: A list of strings and `Sub` elements
     """
 
-    content: list[Sub | str]
+    _content: MutableSequence[Sub | str]
     _allowed_content = Sub, str
     _required_attributes = tuple()
     _optional_attributes = TmxAttributes.x, TmxAttributes.type, TmxAttributes.assoc
@@ -207,7 +246,7 @@ class Ph(TmxElement):
     def __init__(
         self,
         source_element: Optional[_Element] = None,
-        content: Optional[list[Sub | str]] = None,
+        content: Optional[MutableSequence[Sub | str]] = None,
         assoc: Optional[Literal["p", "f", "b"]] = None,
         x: Optional[str | int] = None,
         type: Optional[str] = None,
@@ -220,14 +259,24 @@ class Ph(TmxElement):
         )
         if source_element is not None:
             if source_element.text:
-                self.content.append(source_element.text)
+                self._content.append(source_element.text)
             if len(source_element):
                 for item in source_element:
-                    self.content.append(Sub(source_element=item))
+                    self._content.append(Sub(source_element=item))
                     if item.tail:
-                        self.content.append(item.tail)
+                        self._content.append(item.tail)
         elif content is not None:
-            self.content.extend(content)
+            self._content.extend(content)
+
+    def iter(
+        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
+    ) -> Generator[TmxElement | str, None, None]:
+        for item in self._content:
+            if isinstance(item, str):
+                if str in mask:
+                    yield item
+            else:
+                yield from item.iter(mask)
 
 
 class Ut(TmxElement):
@@ -241,9 +290,11 @@ class Ut(TmxElement):
     Rules for Inline Elements section on the official Tmx Documentation
     to choose which inline element to use instead of `Ut`.
 
-    Required attributes: None
+    Required attributes:
+    ---- None
 
     Optional attributes:
+    ----
         * x: int | str -- used to pair elements between each `Tuv` element
         of a given `Tu` element.
         Facilitates the pairing of allied codes in source and target text,
@@ -254,7 +305,7 @@ class Ut(TmxElement):
     Contents: A list of strings and `Sub` elements
     """
 
-    content: list[Sub | str]
+    _content: MutableSequence[Sub | str]
     _allowed_content = Sub, str
     _required_attributes = (TmxAttributes.x,)
     _optional_attributes = tuple()
@@ -263,7 +314,7 @@ class Ut(TmxElement):
     def __init__(
         self,
         source_element: Optional[_Element] = None,
-        content: Optional[list[Sub | str]] = None,
+        content: Optional[MutableSequence[Sub | str]] = None,
         x: Optional[str | int] = None,
     ) -> None:
         super().__init__(
@@ -272,14 +323,24 @@ class Ut(TmxElement):
         )
         if source_element is not None:
             if source_element.text:
-                self.content.append(source_element.text)
+                self._content.append(source_element.text)
             if len(source_element):
                 for item in source_element:
-                    self.content.append(Sub(source_element=item))
+                    self._content.append(Sub(source_element=item))
                     if item.tail:
-                        self.content.append(item.tail)
+                        self._content.append(item.tail)
         elif content is not None:
-            self.content.extend(content)
+            self._content.extend(content)
+
+    def iter(
+        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
+    ) -> Generator[TmxElement | str, None, None]:
+        for item in self._content:
+            if isinstance(item, str):
+                if str in mask:
+                    yield item
+            else:
+                yield from item.iter(mask)
 
 
 class Hi(TmxElement):
@@ -294,9 +355,11 @@ class Hi(TmxElement):
     that should not be translated; for terminology verification, to mark
     suspect expressions after a grammar checking.
 
-    Required attributes: None
+    Required attributes:
+    ---- None
 
     Optional attributes:
+    ----
         * x: int | str -- used to pair elements between each `Tuv` element
         of a given `Tu` element.
         Facilitates the pairing of allied codes in source and target text,
@@ -310,7 +373,7 @@ class Hi(TmxElement):
     Note: each `Bpt` element must have a subsequent corresponding `Ept` element.
     """
 
-    content: list[Bpt | Ept | Ph | It | Ut | Self | str]
+    _content: MutableSequence[Bpt | Ept | Ph | It | Ut | Self | str]
     _allowed_content = Bpt, Ept, Ph, It, Ut
     _required_attributes = tuple()
     _optional_attributes = TmxAttributes.x, TmxAttributes.type
@@ -320,7 +383,9 @@ class Hi(TmxElement):
     def __init__(
         self,
         source_element: Optional[_Element] = None,
-        content: Optional[list[Bpt | Ept | Ph | It | Ut | Self | str]] = None,
+        content: Optional[
+            MutableSequence[Bpt | Ept | Ph | It | Ut | Self | str]
+        ] = None,
         i: Optional[str | int] = None,
         type: Optional[str] = None,
     ) -> None:
@@ -328,25 +393,35 @@ class Hi(TmxElement):
         super().__init__(source_element=source_element, i=i, type=type)
         if source_element is not None:
             if source_element.text:
-                self.content.append(source_element.text)
+                self._content.append(source_element.text)
             if len(source_element):
                 for item in source_element:
                     if item.tag == "bpt":
-                        self.content.append(Bpt(item))
+                        self._content.append(Bpt(item))
                     if item.tag == "ept":
-                        self.content.append(Ept(item))
+                        self._content.append(Ept(item))
                     if item.tag == "ph":
-                        self.content.append(Ph(item))
+                        self._content.append(Ph(item))
                     if item.tag == "hi":
-                        self.content.append(Hi(item))  # type:ignore
+                        self._content.append(Hi(item))  # type:ignore
                     if item.tag == "it":
-                        self.content.append(It(item))
+                        self._content.append(It(item))
                     if item.tag == "ut":
-                        self.content.append(Ut(item))
+                        self._content.append(Ut(item))
                     if item.tail:
-                        self.content.append(item.tail)
+                        self._content.append(item.tail)
         elif content is not None:
-            self.content.extend(content)
+            self._content.extend(content)
+
+    def iter(
+        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
+    ) -> Generator[TmxElement | str, None, None]:
+        for item in self._content:
+            if isinstance(item, str):
+                if str in mask:
+                    yield item
+            else:
+                yield from item.iter(mask)
 
 
 class Sub(TmxElement):  # type: ignore
@@ -362,9 +437,11 @@ class Sub(TmxElement):  # type: ignore
     interoperability issues when one tool uses sub-flow within its main segment,
     while another extract the sub-flow text as an independent segment.
 
-    Required attributes: None
+    Required attributes:
+    ---- None
 
     Optional attributes:
+    ----
         * type: str -- the kind of data the element represents.
         * datatype: str -- the type of data contained in the element.
 
@@ -373,7 +450,7 @@ class Sub(TmxElement):  # type: ignore
     Note: each `Bpt` element must have a subsequent corresponding `Ept` element.
     """
 
-    content: list[Bpt | Ept | Ph | It | Ut | Self | str]
+    _content: MutableSequence[Bpt | Ept | Ph | It | Ut | Self | Hi | str]
     _allowed_content = Bpt, Ept, Hi, Ph, It, Ut
     _required_attributes = tuple()
     _optional_attributes = TmxAttributes.datatype, TmxAttributes.type
@@ -383,29 +460,41 @@ class Sub(TmxElement):  # type: ignore
     def __init__(
         self,
         source_element: Optional[_Element] = None,
-        content: Optional[list[Bpt | Ept | Ph | It | Ut | Self | str]] = None,
+        content: Optional[
+            MutableSequence[Bpt | Ept | Ph | It | Ut | Self | str]
+        ] = None,
         datatype: Optional[str] = None,
         type: Optional[str] = None,
     ) -> None:
         super().__init__(source_element=source_element, datatype=datatype, type=type)
         if source_element is not None:
             if source_element.text:
-                self.content.append(source_element.text)
+                self._content.append(source_element.text)
             if len(source_element):
                 for item in source_element:
                     if item.tag == "bpt":
-                        self.content.append(Bpt(item))
+                        self._content.append(Bpt(item))
                     if item.tag == "ept":
-                        self.content.append(Ept(item))
+                        self._content.append(Ept(item))
                     if item.tag == "ph":
-                        self.content.append(Ph(item))
+                        self._content.append(Ph(item))
                     if item.tag == "hi":
-                        self.content.append(Hi(item))  # type: ignore
+                        self._content.append(Hi(item))
                     if item.tag == "it":
-                        self.content.append(It(item))
+                        self._content.append(It(item))
                     if item.tag == "ut":
-                        self.content.append(Ut(item))
+                        self._content.append(Ut(item))
                     if item.tail:
-                        self.content.append(item.tail)
+                        self._content.append(item.tail)
         elif content is not None:
-            self.content.extend(content)
+            self._content.extend(content)
+
+    def iter(
+        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
+    ) -> Generator[TmxElement | str, None, None]:
+        for item in self._content:
+            if isinstance(item, str):
+                if str in mask:
+                    yield item
+            else:
+                yield from item.iter(mask)

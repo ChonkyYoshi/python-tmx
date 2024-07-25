@@ -1,7 +1,16 @@
 from datetime import datetime
 from io import BytesIO, StringIO
 from os import PathLike
-from typing import Iterable, Literal, MutableSequence, Optional, override
+from typing import (
+    Any,
+    Generator,
+    Iterable,
+    Literal,
+    MutableSequence,
+    Optional,
+    Type,
+    override,
+)
 
 from lxml.etree import Element, ElementTree, _Element
 
@@ -16,7 +25,7 @@ from PythonTmx.core.inline import Bpt, Ept, Hi, It, Ph, Sub, Ut
 __all__ = ["Header", "Seg", "Tmx", "Tu", "Tuv", "Prop", "Note", "Map", "Ude"]
 
 
-class Prop:
+class Prop(TmxElement):
     """
     <prop>
 
@@ -34,10 +43,14 @@ class Prop:
     properties types, their values should begin with the prefix "x-".
 
     Required attributes:
-        * type: str -- the kind of data the element represents.
+    ----
+        ####  type: str
+         the kind of data the element represents.
 
     Optional attributes:
-        * xmllang: str -- the locale of the element's content.
+    ----
+        ####  xmllang: str
+         the locale of the element's content.
         A language code as described in the [RFC 3066].
         This declared value is considered to apply to all elements within
         the content of the element where it is specified, unless overridden
@@ -52,7 +65,7 @@ class Prop:
     Contents: a str
     """
 
-    content: str
+    text: str
     type: str
     xmllang: Optional[str]
     oencoding: Optional[str]
@@ -63,51 +76,58 @@ class Prop:
     def __init__(
         self,
         source_element: Optional[_Element] = None,
-        content: str = "",
+        text: Optional[str] = None,
         type: Optional[str] = None,
         xmllang: Optional[str] = None,
         oencoding: Optional[str] = None,
     ) -> None:
-        for attribute in (*self._required_attributes, *self._optional_attributes):
-            match attribute:
-                case TmxAttributes.type:
-                    if source_element is not None:
-                        self.__setattr__(
-                            attribute.name,
-                            source_element.get(attribute.value, type),
-                        )
-                case TmxAttributes.xmllang:
-                    if source_element is not None:
-                        self.__setattr__(
-                            attribute.name,
-                            source_element.get(attribute.value, xmllang),
-                        )
-                case TmxAttributes.oencoding:
-                    if source_element is not None:
-                        self.__setattr__(
-                            attribute.name,
-                            source_element.get(attribute.value, oencoding),
-                        )
-        if source_element is not None and source_element.text:
-            self.content += source_element.text
+        super().__init__(
+            source_element=source_element,
+            type=type,
+            xmllang=xmllang,
+            oencoding=oencoding,
+        )
+        if source_element is not None:
+            if source_element.text is not None:
+                self.text = source_element.text
+            elif text is not None:
+                self.text = text
+            else:
+                self.text = str()
+        elif text is not None:
+            self.text = text
         else:
-            self.content = content
-        self.xml_attrib = TmxElement.xml_attrib
-        self.to_element = TmxElement.to_element
-        self.iter_element = TmxElement.iter_element
-        self.iter_text = TmxElement.iter_text
+            self.text = str()
+
+    @override
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name == "_content":
+            raise ValueError(
+                "Prop elements are not allowed to have content. "
+                "Please use the 'text' property instead"
+            )
+        return super().__setattr__(name, value)
+
+    def iter(
+        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
+    ) -> Generator[TmxElement | str, None, None]:
+        if str in mask:
+            yield self.text
 
 
-class Note:
+class Note(TmxElement):
     """
     <note>
 
     Note - The `Note` element is used for comments.
 
-    Required attributes: None.
+    Required attributes:
+    ---- None.
 
     Optional attributes:
-        * xmllang: str -- the locale of the element's content.
+    ----
+        ####  xmllang: str
+         the locale of the element's content.
         A language code as described in the [RFC 3066].
         This declared value is considered to apply to all elements within
         the content of the element where it is specified, unless overridden
@@ -122,45 +142,54 @@ class Note:
     Contents: a str
     """
 
-    content: str
+    text: str
     xmllang: Optional[str]
     oencoding: Optional[str]
-    _required_attributes: tuple = tuple()
+    _required_attributes = tuple()
     _optional_attributes = TmxAttributes.xmllang, TmxAttributes.oencoding
     _allowed_content = (str,)
 
     def __init__(
         self,
         source_element: Optional[_Element] = None,
-        content: str = "",
+        text: Optional[str] = None,
         xmllang: Optional[str] = None,
         oencoding: Optional[str] = None,
     ) -> None:
-        for attribute in (*self._required_attributes, *self._optional_attributes):
-            match attribute:
-                case TmxAttributes.xmllang:
-                    if source_element is not None:
-                        self.__setattr__(
-                            attribute.name,
-                            source_element.get(attribute.value, xmllang),
-                        )
-                case TmxAttributes.oencoding:
-                    if source_element is not None:
-                        self.__setattr__(
-                            attribute.name,
-                            source_element.get(attribute.value, oencoding),
-                        )
-        if source_element is not None and source_element.text:
-            self.content += source_element.text
+        super().__init__(
+            source_element=source_element,
+            xmllang=xmllang,
+            oencoding=oencoding,
+        )
+        if source_element is not None:
+            if source_element.text is not None:
+                self.text = source_element.text
+            elif text is not None:
+                self.text = text
+            else:
+                self.text = str()
+        elif text is not None:
+            self.text = text
         else:
-            self.content = content
-        self.xml_attrib = TmxElement.xml_attrib
-        self.to_element = TmxElement.to_element
-        self.iter_element = TmxElement.iter_element
-        self.iter_text = TmxElement.iter_text
+            self.text = str()
+
+    @override
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name == "_content":
+            raise ValueError(
+                "Note elements are not allowed to have content. "
+                "Please use the 'text' property instead"
+            )
+        return super().__setattr__(name, value)
+
+    def iter(
+        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
+    ) -> Generator[TmxElement | str, None, None]:
+        if str in mask:
+            yield self.text
 
 
-class Map:
+class Map(TmxElement):
     """
     <map/>
 
@@ -168,16 +197,22 @@ class Map:
     some of its properties.
 
     Required attributes:
-        * unicode: str --  Unicode character value of a <map/> element.
+    ----
+        ####  unicode: str
+          Unicode character value of a <map/> element.
         Its value must be a valid Unicode value (including values in the
         Private Use areas) in hexadecimal format. For example: unicode="#xF8FF".
 
     Optional attributes:
-        * code: str -- The code-point value corresponding to the unicode
+    ----
+        ####  code: str
+         The code-point value corresponding to the unicode
         character of a given `Map` element. A Hexadecimal value prefixed with
         "#x". For example: code="#x9F".
-        * ent: str -- the entity name of the character of a given `Map` element
-        * subst: str -- an alternative string for the character defined in a
+        ####  ent: str
+         the entity name of the character of a given `Map` element
+        ####  subst: str
+         an alternative string for the character defined in a
         given `Map` element
 
     Note: at least one of the optional attributes should be specified.
@@ -187,14 +222,13 @@ class Map:
     Contents: None
     """
 
-    content = None
     unicode: str
     code: Optional[str]
     ent: Optional[str]
     subst: Optional[str]
     _required_attributes = (TmxAttributes.unicode,)
     _optional_attributes = TmxAttributes.code, TmxAttributes.ent, TmxAttributes.subst
-    _allowed_content: tuple = tuple()
+    _allowed_content = tuple()
 
     def __init__(
         self,
@@ -204,54 +238,64 @@ class Map:
         ent: Optional[str] = None,
         subst: Optional[str] = None,
     ) -> None:
-        for attribute in (*self._required_attributes, *self._optional_attributes):
-            match attribute:
-                case TmxAttributes.unicode:
-                    if source_element is not None:
-                        self.__setattr__(
-                            attribute.name,
-                            source_element.get(attribute.value, unicode),
-                        )
-                case TmxAttributes.code:
-                    if source_element is not None:
-                        self.__setattr__(
-                            attribute.name,
-                            source_element.get(attribute.value, code),
-                        )
-                case TmxAttributes.ent:
-                    if source_element is not None:
-                        self.__setattr__(
-                            attribute.name,
-                            source_element.get(attribute.value, ent),
-                        )
-                case TmxAttributes.subst:
-                    if source_element is not None:
-                        self.__setattr__(
-                            attribute.name,
-                            source_element.get(attribute.value, subst),
-                        )
+        super().__init__(unicode=unicode, code=code, ent=ent, subst=subst)
         if source_element is not None:
             if source_element.text:
                 raise ExtraTextError("map", source_element.text)
             if source_element.tail:
                 raise ExtraTailError("map", source_element.tail)
-        self.xml_attrib = TmxElement.xml_attrib
-        self.to_element = TmxElement.to_element
-        self.iter_element = TmxElement.iter_element
-        self.iter_text = TmxElement.iter_text
+
+    @override
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name == "_content":
+            raise ValueError(
+                "Map elements are empty elements and are not allowed to have content"
+            )
+        return super().__setattr__(name, value)
+
+    def iter(self):
+        return
 
 
 class Ude(TmxElement):
+    """
+    <ude>
+
+    User-Defined Encoding - The `Ude` element is used to specify a set of
+    user-defined characters and/or, optionally their mapping
+    from Unicode to the user-defined encoding.
+
+    Note: PythonTmx DOES NOT make use of the encoding defined in `Ude` and `Map`.
+    These are purely for use by CAT Tools.
+
+    Required attributes:
+    ----
+        ####  name: str
+         the name of a `Ude` element. Its value is not defined
+        by the standard, but tools providers should publish the values they use.
+
+    Optional attributes:
+    ----
+        ####  base: str
+         the encoding upon which the re-mapping of the `Ude`
+        element is based.
+        Note: required if one or more of the `Map` elements contains a
+        code attribute
+
+    Contents: a list `Map` elements
+    """
+
+    maps: list[Map]
     name: str
     base: Optional[str]
     _required_attributes = (TmxAttributes.name,)
     _optional_attributes = (TmxAttributes.base,)
-    _allowed_content = (Map,)
+    _allowed_content = tuple()
 
     def __init__(
         self,
         source_element: Optional[_Element] = None,
-        content: Optional[Iterable[Map]] = None,
+        content: Optional[MutableSequence[Map]] = None,
         name: Optional[str] = None,
         base: Optional[str] = None,
     ) -> None:
@@ -267,13 +311,68 @@ class Ude(TmxElement):
                 raise ExtraTailError("ude", source_element.tail)
             if len(source_element):
                 for map_ in source_element:
-                    self.content.append(Map(map_))
+                    self.maps.append(Map(map_))
             else:
                 if content is not None:
-                    self.content.extend(content)
+                    self.maps.extend(content)
+
+    @override
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name == "_content":
+            raise ValueError(
+                "Ude elements are not allowed to have content. "
+                "Please use the 'maps' property instead"
+            )
+        return super().__setattr__(name, value)
+
+    def iter(
+        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
+    ) -> Generator[TmxElement | str, None, None]:
+        if Map in mask or TmxElement in mask:
+            yield from self.maps
 
 
 class Header(TmxElement):
+    """
+    <header>
+
+    File header - The `Header` element contains information pertaining
+    to the whole document.
+
+    ## Required attributes:
+    ####  creationtool: str
+    The tool that created the TMX document.
+    ####  creationtoolversion: str
+    The version of the tool that created the TMX document.
+    ####  segtype: "block" | "paragraph" | "sentence" | "phrase"
+    The kind of segmentation used in the `Tu` element.
+    ####  otmf: str
+    The format of the translation memory file from which the TMX documen
+    or segment thereof have been generated.
+    ####  adminlang: str
+    The default language for the administrative and informative elements
+    `Note` and `Prop`.
+    ####  srclang: str
+    The language of the source text.
+    Can be set to "*all*" if any language inside a tu can be used a source.
+    ####  datatype: str
+    The type of data
+
+    ## Optional attributes:
+    #### oencoding: str
+    The original or preferred code set of the data
+    ####  creationdate: str | datetime
+    The date of creation of the element.
+    ####  creationid: str
+    The identifier of the user who created the element
+    ####  changedate: str | datetime
+    The date of the last modification of
+    #### changeid: str
+    The identifier of the user who modified the element last
+
+    ## Contents: None
+    """
+
     _required_attributes = (
         TmxAttributes.creationtool,
         TmxAttributes.creationtoolversion,
@@ -290,7 +389,7 @@ class Header(TmxElement):
         TmxAttributes.changedate,
         TmxAttributes.changeid,
     )
-    _allowed_content = (Ude,)
+    _allowed_content = tuple()
     creationtool: str
     creationtoolversion: str
     segtype: Literal["block", "paragraph", "sentence", "phrase"]
@@ -303,13 +402,14 @@ class Header(TmxElement):
     creationid: Optional[str]
     changedate: Optional[str | datetime]
     changeid: Optional[str]
-    props: Optional[MutableSequence[Prop]]
-    notes: Optional[MutableSequence[Note]]
+    props: MutableSequence[Prop]
+    notes: MutableSequence[Note]
+    udes: MutableSequence[Ude]
 
     def __init__(
         self,
         source_element: Optional[_Element] = None,
-        content: Optional[Iterable[Ude]] = None,
+        udes: Optional[Iterable[Ude]] = None,
         creationtool: Optional[str] = None,
         creationtoolversion: Optional[str] = None,
         segtype: Optional[Literal["block", "paragraph", "sentence", "phrase"]] = None,
@@ -340,7 +440,7 @@ class Header(TmxElement):
             changedate=changedate,
             changeid=changeid,
         )
-        self.notes, self.props = [], []
+        self.notes, self.props, self.udes = [], [], []
         if source_element is not None:
             if source_element.text:
                 raise ExtraTextError("header", source_element.text)
@@ -349,18 +449,37 @@ class Header(TmxElement):
             if len(source_element):
                 for item in source_element:
                     if item.tag == "ude":
-                        self.content.append(Ude(item))
+                        self.udes.append(Ude(item))
                     if item.tag == "note":
                         self.notes.append(Note(item))
                     if item.tag == "prop":
                         self.props.append(Prop(item))
             else:
-                if content is not None:
-                    self.content.extend(content)
+                if udes is not None:
+                    self.udes.extend(udes)
                 if props is not None:
                     self.props.extend(props)
                 if notes is not None:
                     self.notes.extend(notes)
+
+    @override
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name == "_content":
+            raise ValueError(
+                "header elements are not allowed to have content. "
+                "Please use the 'udes', 'props' or 'notes' properties instead"
+            )
+        return super().__setattr__(name, value)
+
+    def iter(
+        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
+    ) -> Generator[TmxElement | str, None, None]:
+        if Note in mask or TmxElement in mask:
+            yield from self.notes
+        if Prop in mask or TmxElement in mask:
+            yield from self.props
+        if Ude in mask or TmxElement in mask:
+            yield from self.udes
 
 
 class Seg(TmxElement):
@@ -378,27 +497,40 @@ class Seg(TmxElement):
         super().__init__(source_element=source_element, datatype=datatype, type=type)
         if source_element is not None:
             if source_element.text:
-                self.content.append(source_element.text)
+                self._content.append(source_element.text)
             if len(source_element):
                 for item in source_element:
                     if item.tag == "bpt":
-                        self.content.append(Bpt(item))
+                        self._content.append(Bpt(item))
                     if item.tag == "ept":
-                        self.content.append(Ept(item))
+                        self._content.append(Ept(item))
                     if item.tag == "ph":
-                        self.content.append(Ph(item))
+                        self._content.append(Ph(item))
                     if item.tag == "hi":
-                        self.content.append(Hi(item))
+                        self._content.append(Hi(item))
                     if item.tag == "it":
-                        self.content.append(It(item))
+                        self._content.append(It(item))
                     if item.tag == "ut":
-                        self.content.append(Ut(item))
+                        self._content.append(Ut(item))
                     if item.tag == "sub":
-                        self.content.append(Sub(source_element=item))
+                        self._content.append(Sub(source_element=item))
                     if item.tail:
-                        self.content.append(item.tail)
+                        self._content.append(item.tail)
         elif content is not None:
-            self.content.extend(content)
+            self._content.extend(content)
+
+    def __iter__(self) -> Generator[str | TmxElement, None, None]:
+        yield from self._content
+
+    def iter(
+        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
+    ) -> Generator[TmxElement | str, None, None]:
+        for item in self:
+            if isinstance(item, str):
+                if str in mask:
+                    yield item
+            else:
+                yield from item.iter(mask)
 
 
 class Tuv(TmxElement):
@@ -416,7 +548,8 @@ class Tuv(TmxElement):
         TmxAttributes.changeid,
         TmxAttributes.otmf,
     )
-    _allowed_content = (Seg,)
+    segment: Seg
+    _allowed_content = tuple()
     xmllang: Optional[str]
     oencoding: Optional[str]
     datatype: Optional[str]
@@ -429,13 +562,13 @@ class Tuv(TmxElement):
     changedate: Optional[str]
     changeid: Optional[str]
     otmf: Optional[str]
-    props: Optional[MutableSequence[Prop]]
-    notes: Optional[MutableSequence[Note]]
+    props: MutableSequence[Prop]
+    notes: MutableSequence[Note]
 
     def __init__(
         self,
         source_element: Optional[_Element] = None,
-        content: Optional[Seg] = None,
+        segment: Optional[Seg] = None,
         xmllang: Optional[str] = None,
         oencoding: Optional[str] = None,
         datatype: Optional[str] = None,
@@ -467,6 +600,7 @@ class Tuv(TmxElement):
             otmf=otmf,
         )
         self.notes, self.props = [], []
+        self.segment = None  # type: ignore
         if source_element is not None:
             if source_element.text:
                 raise ExtraTextError("tuv", source_element.text)
@@ -475,20 +609,40 @@ class Tuv(TmxElement):
             if len(source_element):
                 for item in source_element:
                     if item.tag == "seg":
-                        if len(self.content) != 0:
+                        if self.segment is not None:
                             raise ValueError("Only one seg element per tuv")
-                        self.content.append(Seg(item))
+                        self.segment = Seg(item)
                     if item.tag == "note":
                         self.notes.append(Note(item))
                     if item.tag == "prop":
                         self.props.append(Prop(item))
             else:
-                if content is not None:
-                    self.content.append(content)
+                if segment is not None:
+                    self.segment = segment
                 if props is not None:
                     self.props.extend(props)
                 if notes is not None:
                     self.notes.extend(notes)
+
+    @override
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name == "_content":
+            raise ValueError(
+                "Tuv elements are not allowed to have content. "
+                "Please use the 'segment' property instead"
+            )
+        return super().__setattr__(name, value)
+
+    def iter(
+        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
+    ) -> Generator[TmxElement | str, None, None]:
+        if Note in mask or TmxElement in mask:
+            yield from self.notes
+        if Prop in mask or TmxElement in mask:
+            yield from self.props
+        if Seg in mask or TmxElement in mask:
+            yield self.segment
+        yield from self.segment.iter(mask)
 
 
 class Tu(TmxElement):
@@ -509,7 +663,8 @@ class Tu(TmxElement):
         TmxAttributes.otmf,
         TmxAttributes.srclang,
     )
-    _allowed_content = (Tuv,)
+    _allowed_content = ()
+    tuvs: MutableSequence[Tuv]
     tuid: Optional[str]
     xmllang: Optional[str]
     oencoding: Optional[str]
@@ -525,8 +680,8 @@ class Tu(TmxElement):
     changeid: Optional[str]
     otmf: Optional[str]
     srclang: Optional[str]
-    props: Optional[MutableSequence[Prop]]
-    notes: Optional[MutableSequence[Note]]
+    props: MutableSequence[Prop]
+    notes: MutableSequence[Note]
 
     def __init__(
         self,
@@ -568,7 +723,7 @@ class Tu(TmxElement):
             otmf=otmf,
             srclang=srclang,
         )
-        self.notes, self.props = [], []
+        self.notes, self.props, self.tuvs = [], [], []
         if source_element is not None:
             if source_element.text:
                 raise ExtraTextError("tu", source_element.text)
@@ -577,26 +732,48 @@ class Tu(TmxElement):
             if len(source_element):
                 for item in source_element:
                     if item.tag == "tuv":
-                        self.content.append(Tuv(item))
+                        self.tuvs.append(Tuv(item))
                     if item.tag == "note":
                         self.notes.append(Note(item))
                     if item.tag == "prop":
                         self.props.append(Prop(item))
             else:
                 if content is not None:
-                    self.content.extend(content)
+                    self.tuvs.extend(content)
                 if props is not None:
                     self.props.extend(props)
                 if notes is not None:
                     self.notes.extend(notes)
 
+    @override
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name == "_content":
+            raise ValueError(
+                "Tu elements are not allowed to have content. "
+                "Please use the 'tuvs' property instead"
+            )
+        return super().__setattr__(name, value)
+
+    def iter(
+        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
+    ) -> Generator[TmxElement | str, None, None]:
+        if Note in mask or TmxElement in mask:
+            yield from self.notes
+        if Prop in mask or TmxElement in mask:
+            yield from self.props
+        for item in self.tuvs:
+            if Tuv in mask or TmxElement in mask:
+                yield item
+            yield from item.iter(mask)
+
 
 class Tmx(TmxElement):
-    _allowed_content = (Tu,)
+    _allowed_content = ()
     _required_attributes = (TmxAttributes.version,)
     _optional_attributes = tuple()
     version: str = "1.4"
     header: Header
+    tus: MutableSequence[Tu]
 
     def __init__(
         self,
@@ -605,6 +782,7 @@ class Tmx(TmxElement):
         content: Optional[Iterable[Tu]] = None,
     ) -> None:
         super().__init__(source_element=source_element)
+        self.tus = []
         if source_element is not None:
             if source_element.text:
                 raise ExtraTextError("tmx", source_element.text)
@@ -615,16 +793,33 @@ class Tmx(TmxElement):
                     if item.tag == "body":
                         for tu in item:
                             if tu.tag == "tu":
-                                self.content.append(Tu(tu))
+                                self.tus.append(Tu(tu))
                     if item.tag == "header":
                         self.header = Header(item)
             else:
                 if content is not None:
-                    self.content.extend(content)
+                    self._content.extend(content)
                     if header is not None:
                         self.header = header
                     else:
                         self.header = Header()
+
+    @override
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name == "_content":
+            raise ValueError(
+                "Tu elements are not allowed to have content. "
+                "Please use the 'tuvs' property instead"
+            )
+        return super().__setattr__(name, value)
+
+    def iter(
+        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
+    ) -> Generator[TmxElement | str, None, None]:
+        for item in self.tus:
+            if Tu in mask or TmxElement in mask:
+                yield item
+            yield from item.iter(mask)
 
     @override
     def to_element(self) -> _Element:
@@ -632,16 +827,12 @@ class Tmx(TmxElement):
         elem.append(self.header.to_element())
         body = Element("body")
         elem.append(body)
-        for tu in self.content:
-            if not isinstance(tu, str):
-                body.append(tu.to_element())
+        for tu in self.tus:
+            body.append(tu.to_element())
         return elem
 
     def export_to_file(self, file: str | bytes | PathLike | StringIO | BytesIO) -> None:
         ElementTree(self.to_element()).write(
             file,
-            encoding=(
-                self.header.oencoding if self.header.oencoding is not None else "utf-8"
-            ),
             xml_declaration=True,
         )

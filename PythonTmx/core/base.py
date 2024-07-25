@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from abc import abstractmethod
 from datetime import datetime
 from enum import Enum
-from typing import Iterator, Optional, Type
+from typing import ClassVar, Generator, MutableSequence, Optional, Type
 
 from lxml.etree import Element, _Element
 
@@ -64,16 +65,16 @@ class TmxtagError(Exception):
 
 
 class TmxElement:
-    content: list
-    _required_attributes: tuple[TmxAttributes, ...]
-    _optional_attributes: tuple[TmxAttributes, ...]
-    _allowed_content: tuple[Type, ...]
+    _content: MutableSequence
+    _required_attributes: ClassVar[tuple[TmxAttributes, ...]]
+    _optional_attributes: ClassVar[tuple[TmxAttributes, ...]]
+    _allowed_content: ClassVar[tuple[Type, ...]]
 
     def __init__(self, **kwargs) -> None:
         # only takes care of setting attributes, parsing source_element's content
-        # is done in each subclass individually to have custom behavior
+        # is done in each subclass individually
         source_element: Optional[_Element] = kwargs.get("source_element", None)
-        self.content = []
+        self.__dict__["_content"] = []
         if (
             source_element is not None
             and source_element.tag != self.__class__.__name__.lower()
@@ -81,14 +82,28 @@ class TmxElement:
             raise TmxtagError(self.__class__.__name__.lower(), source_element.tag)
         for attribute in (*self._required_attributes, *self._optional_attributes):
             if source_element is not None:
-                self.__setattr__(
-                    attribute.name,
-                    source_element.get(
-                        attribute.value, kwargs.get(attribute.name, None)
-                    ),
+                val = source_element.get(
+                    attribute.value, kwargs.get(attribute.name, None)
                 )
             else:
-                self.__setattr__(attribute.name, kwargs.get(attribute.name, None))
+                val = kwargs.get(attribute.name, None)
+            match attribute:
+                case TmxAttributes.i | TmxAttributes.x | TmxAttributes.usagecount:
+                    try:
+                        self.__setattr__(attribute.name, int(val))
+                    except (ValueError, TypeError):
+                        self.__setattr__(attribute.name, val)
+                case (
+                    TmxAttributes.creationdate
+                    | TmxAttributes.changedate
+                    | TmxAttributes.lastusagedate
+                ):
+                    try:
+                        self.__setattr__(
+                            attribute.name, datetime.strptime(val, r"%Y%m%dT%H%M%SZ")
+                        )
+                    except (ValueError, TypeError):
+                        self.__setattr__(attribute.name, val)
 
     def xml_attrib(self) -> dict[str, str]:
         """
@@ -242,72 +257,66 @@ class TmxElement:
         if hasattr(self, "notes"):
             for note in self.notes:
                 elem.append(note.to_element())
-        if isinstance(self.content, str):
-            elem.text = self.content
+        if hasattr(self, "udes"):
+            for ude in self.udes:
+                elem.append(ude.to_element())
+        if hasattr(self, "maps"):
+            for map_ in self.maps:
+                elem.append(map_.to_element())
+        if hasattr(self, "text"):
+            elem.text = self.text
             return elem
-        for item in self.content:
-            match item:
-                case x if type(x) not in self._allowed_content:
-                    raise TmxError(
-                        f"'{self.__class__.__name__}' are not allowed to have '{item.__class__.__name__}' elements in their content"
-                    )
-                case str():
-                    if len(elem):
-                        if elem[-1].tail:
-                            elem[-1].tail += item
+        if hasattr(self, "segment"):
+            elem.append(self.segment.to_element())
+        else:
+            for item in self._content:
+                match item:
+                    case x if type(x) not in self._allowed_content:
+                        raise TmxError(
+                            f"'{self.__class__.__name__}' are not allowed to have '{item.__class__.__name__}' elements in their content"
+                        )
+                    case str():
+                        if len(elem):
+                            if elem[-1].tail:
+                                elem[-1].tail += item
+                            else:
+                                elem[-1].tail = item
                         else:
-                            elem[-1].tail = item
-                    else:
-                        elem.text += item
-                case TmxElement():
-                    if item.__class__.__name__ == "Bpt":
-                        bpt += 1
-                    if item.__class__.__name__ == "Ept":
-                        ept += 1
-                    if hasattr(item, "base"):
-                        base = True
-                    if hasattr(item, "code"):
-                        base = True
-                    elem.append(item.to_element())
-        if bpt - ept > 0:
-            raise TmxError(
-                f"Element '{self.__class__.__name__}' has {bpt - ept} bpt element without their corresponding ept elements"
-            )
-        elif bpt - ept < 0:
-            raise TmxError(
-                f"Element '{self.__class__.__name__}' has {ept - bpt} ept element without their corresponding bpt elements"
-            )
-        if code and not base:
-            raise TmxError(
-                "Ude element 'base' attribute cannot be None as at least one of its Map elements has a 'code' attribute"
-            )
+                            elem.text += item
+                    case TmxElement():
+                        if item.__class__.__name__ == "Bpt":
+                            bpt += 1
+                        if item.__class__.__name__ == "Ept":
+                            ept += 1
+                        if hasattr(item, "base"):
+                            base = True
+                        if hasattr(item, "code"):
+                            base = True
+                        elem.append(item.to_element())
+            if bpt - ept > 0:
+                raise TmxError(
+                    f"Element '{self.__class__.__name__}' has {bpt - ept} bpt element without their corresponding ept elements"
+                )
+            elif bpt - ept < 0:
+                raise TmxError(
+                    f"Element '{self.__class__.__name__}' has {ept - bpt} ept element without their corresponding bpt elements"
+                )
+            if code and not base:
+                raise TmxError(
+                    "Ude element 'base' attribute cannot be None as at least one of its Map elements has a 'code' attribute"
+                )
         return elem
 
-    def iter_text(self) -> Iterator[str]:
+    @abstractmethod
+    def iter(self, mask) -> Generator[TmxElement | str, None, None]:
         """
-        Opposite of iter_element, recursively iterates over an element and yields
-        any str
-        """
-        if isinstance(self.content, str):
-            yield self.content
-        else:
-            for item in self.content:
-                if isinstance(item, str):
-                    yield item
-                else:
-                    yield from item.iter_text()
+        Recursively iterates over all the contents of the element and yields
+        any item whose type is in mask. if mask is None, yields everything.
 
-    def iter_element(
-        self,
-    ) -> Iterator[TmxElement]:
+        Keyword Arguments:
+            mask {Optional[Type  |  tuple[Type]]} -- the types to look for. If
+            None, yields everything.
+
+        Yields:
+            Any descendant element whose type matches the mask
         """
-        Opposite of iter_text, recursively iterates over an element and
-        yields all Tmx elements it finds.
-        """
-        if isinstance(self.content, str):
-            pass
-        else:
-            for item in self.content:
-                if not isinstance(item, str):
-                    yield item
-                    yield from item.iter()
