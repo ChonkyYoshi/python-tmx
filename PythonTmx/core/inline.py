@@ -1,4 +1,4 @@
-from typing import Any, Generator, Literal, MutableSequence, Optional, Self, Type
+from typing import Literal, MutableSequence, Optional, Self
 
 from lxml.etree import _Element
 
@@ -7,34 +7,32 @@ from PythonTmx.core.base import TmxAttributes, TmxElement
 __all__ = ["Bpt", "Ept", "Hi", "It", "Ph", "Sub", "Ut"]
 
 
-class Sub(TmxElement):
-    def iter(self): ...
+class Sub(TmxElement): ...
 
 
 class Bpt(TmxElement):
     """
-    <bpt>
-
     Begin paired tag - The `Bpt` element is used to delimit the beginning of
     a paired sequence of native codes.
     Each `Bpt` has a corresponding `Ept` element within the element it's in.
 
-    Required attributes:
-    ----
-        * i: int | str -- used to pair a `Bpt` elements with `Ept` elements.
-        Provides support to markup a possibly overlapping range of codes.
+    ## Required attributes:
+    #### i: int | str
+    Used to pair a `Bpt` elements with `Ept` elements.
+    Provides support to markup a possibly overlapping range of codes.
 
-    Optional attributes:
-    ----
-        * x: int | str -- used to pair elements between each `Tuv` element
-        of a given `Tu` element.
-        Facilitates the pairing of allied codes in source and target text,
-        even if the order of code occurrence differs between the two because of
-        the translation syntax. Note that an `Ept` element is matched based
-        on the x attribute of its corresponding `bpt` element.
-        * type: str -- the kind of data the element represents.
+    ## ## Optional attributes:
+    ###int | str
+    Used to pair elements between each `Tuv` element of a given `Tu` element.
+    Facilitates the pairing of allied codes in source and target text,
+    even if the order of code occurrence differs between the two because of
+    the translation syntax. Note that an `Ept` element is matched based
+    on the x attribute of its corresponding `Bpt` element.
+    #### type: str
+    The kind of data the element represents.
 
-    Contents: A list of strings and `Sub` elements
+    ## Contents
+    A MutableSequence of strings and `Sub` elements
     """
 
     _content: MutableSequence[Sub | str]
@@ -70,34 +68,23 @@ class Bpt(TmxElement):
         elif content is not None:
             self._content.extend(content)
 
-    def iter(
-        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
-    ) -> Generator[TmxElement | str, None, None]:
-        for item in self._content:
-            if isinstance(item, str):
-                if str in mask:
-                    yield item
-            else:
-                yield from item.iter(mask)
-
 
 class Ept(TmxElement):
     """
-    <ept>
-
     End paired tag - The `Ept` element is used to delimit the beginning of
     a paired sequence of native codes.
     Each `Ept` has a corresponding `Bpt` element within the element it's in.
 
-    Required attributes:
-    ----
-        * i: int | str -- used to pair a `Bpt` elements with `Ept` elements.
-        Provides support to markup a possibly overlapping range of codes.
+    ## Required attributes:
+    #### i: int | str
+    Used to pair a `Bpt` elements with `Ept` elements.
+    Provides support to markup a possibly overlapping range of codes.
 
-    Optional attributes:
-    ---- None
+    ## Optional attributes:
+    None
 
-    Contents: A list of strings and `Sub` elements
+    ## Contents:
+    A MutableSequence of strings and `Sub` elements
     """
 
     _content: MutableSequence[Sub | str]
@@ -127,40 +114,29 @@ class Ept(TmxElement):
         elif content is not None:
             self._content.extend(content)
 
-    def iter(
-        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
-    ) -> Generator[TmxElement | str, None, None]:
-        for item in self._content:
-            if isinstance(item, str):
-                if str in mask:
-                    yield item
-            else:
-                yield from item.iter(mask)
-
 
 class It(TmxElement):
     """
-    <it>
-
     Isolated tag - The `It` element is used to delimit a beginning/ending
     sequence of native codes that does not have its corresponding
     ending/beginning within the segment.
 
-    Required attributes:
-    ----
-        * pos: "begin" | "end" -- whether this is a beginning or ending tag
+    ## Required attributes:
+    #### pos: "begin" | "end"
+    Whether this is a beginning or ending tag
 
-    Optional attributes:
-    ----
-        * x: int | str -- used to pair elements between each `Tuv` element
-        of a given `Tu` element.
-        Facilitates the pairing of allied codes in source and target text,
-        even if the order of code occurrence differs between the two because of
-        the translation syntax. Note that an `Ept` element is matched based
-        on the x attribute of its corresponding `bpt` element.
-        * type: str -- the kind of data the element represents.
+    ## Optional attributes:
+    #### x: int | str -- used to pair elements between each `Tuv` element
+    of a given `Tu` element.
+    Facilitates the pairing of allied codes in source and target text,
+    even if the order of code occurrence differs between the two because of
+    the translation syntax. Note that an `Ept` element is matched based on
+    the x attribute of its corresponding `Bpt` element.
+    #### type: str
+    The kind of data the element represents.
 
-    Contents: A list of strings and `Sub` elements
+    ## Contents:
+    A MutableSequence of strings and `Sub` elements
     """
 
     _content: MutableSequence[Sub | str]
@@ -196,43 +172,32 @@ class It(TmxElement):
         elif content is not None:
             self._content.extend(content)
 
-    def iter(
-        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
-    ) -> Generator[TmxElement | str, None, None]:
-        for item in self._content:
-            if isinstance(item, str):
-                if str in mask:
-                    yield item
-            else:
-                yield from item.iter(mask)
-
 
 class Ph(TmxElement):
     """
-    <ph>
-
     Placeholder - The `Ph` element is used to delimit a sequence of native
     standalone codes in the segment.
 
-    Required attributes:
-    ---- None
+    ## Required attributes: None
+    None
 
-    Optional attributes:
-    ----
-        * x: int | str -- used to pair elements between each `Tuv` element
-        of a given `Tu` element.
-        Facilitates the pairing of allied codes in source and target text,
-        even if the order of code occurrence differs between the two because of
-        the translation syntax. Note that an `Ept` element is matched based
-        on the x attribute of its corresponding `bpt` element.
-        * type: str -- the kind of data the element represents.
-        * assoc: "p", "f", "b" -- whether this is associated with the text
-        prior or after:
-            - "p": the element is associated with the text preceding the element
-            - "f": the element is associated with the text following the element
-            - "b": the element is associated with the text on both sides
+    ## Optional attributes:
+    #### x: int | str
+    Used to pair elements between each `Tuv` element of a given `Tu` element.
+    Facilitates the pairing of allied codes in source and target text,
+    even if the order of code occurrence differs between the two because of
+    the translation syntax. Note that an `Ept` element is matched based on
+    the x attribute of its corresponding `Bpt` element.
+    ## type: str
+    The kind of data the element represents.
+    #### assoc: "p", "f", "b"
+    Whether this is associated with the text prior or after:
+    - "p": the element is associated with the text preceding the element
+    - "f": the element is associated with the text following the element
+    - "b": the element is associated with the text on both sides
 
-    Contents: A list of strings and `Sub` elements
+    ## Contents:
+    A MutableSequence of strings and `Sub` elements
     """
 
     _content: MutableSequence[Sub | str]
@@ -268,21 +233,9 @@ class Ph(TmxElement):
         elif content is not None:
             self._content.extend(content)
 
-    def iter(
-        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
-    ) -> Generator[TmxElement | str, None, None]:
-        for item in self._content:
-            if isinstance(item, str):
-                if str in mask:
-                    yield item
-            else:
-                yield from item.iter(mask)
-
 
 class Ut(TmxElement):
     """
-    <ut>
-
     Unknown Tag - The `Ut` element is used to delimit a sequence
     of native unknown codes in the segment.
 
@@ -290,19 +243,18 @@ class Ut(TmxElement):
     Rules for Inline Elements section on the official Tmx Documentation
     to choose which inline element to use instead of `Ut`.
 
-    Required attributes:
-    ---- None
+    ## Required attributes:
+    None
+    ## Optional attributes:
+    #### x: int | str
+    Used to pair elements between each `Tuv` element of a given `Tu` element.
+    Facilitates the pairing of allied codes in source and target text,
+    even if the order of code occurrence differs between the two because of
+    the translation syntax. Note that an `Ept` element is matched based
+    on the x attribute of its corresponding `Bpt` element.
 
-    Optional attributes:
-    ----
-        * x: int | str -- used to pair elements between each `Tuv` element
-        of a given `Tu` element.
-        Facilitates the pairing of allied codes in source and target text,
-        even if the order of code occurrence differs between the two because of
-        the translation syntax. Note that an `Ept` element is matched based
-        on the x attribute of its corresponding `bpt` element.
-
-    Contents: A list of strings and `Sub` elements
+    ## Contents:
+    A MutableSequence of strings and `Sub` elements
     """
 
     _content: MutableSequence[Sub | str]
@@ -332,21 +284,9 @@ class Ut(TmxElement):
         elif content is not None:
             self._content.extend(content)
 
-    def iter(
-        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
-    ) -> Generator[TmxElement | str, None, None]:
-        for item in self._content:
-            if isinstance(item, str):
-                if str in mask:
-                    yield item
-            else:
-                yield from item.iter(mask)
-
 
 class Hi(TmxElement):
     """
-    <hi>
-
     Highlight - The `Hi` element delimits a section of text that has
     special meaning, such as a terminological unit, a proper name,
     an item that should not be modified, etc.
@@ -355,22 +295,23 @@ class Hi(TmxElement):
     that should not be translated; for terminology verification, to mark
     suspect expressions after a grammar checking.
 
-    Required attributes:
-    ---- None
-
-    Optional attributes:
-    ----
-        * x: int | str -- used to pair elements between each `Tuv` element
-        of a given `Tu` element.
-        Facilitates the pairing of allied codes in source and target text,
-        even if the order of code occurrence differs between the two because of
-        the translation syntax. Note that an `Ept` element is matched based
-        on the x attribute of its corresponding `bpt` element.
-        * type: str -- the kind of data the element represents.
-
-    Contents: A list of strings, `Sub`, `Bpt`, `Ept`, `It`, `Ph` or `Hi`.
-
     Note: each `Bpt` element must have a subsequent corresponding `Ept` element.
+
+    ## Required attributes:
+    None
+    ## Optional attributes:
+    #### x: int | str
+    Used to pair elements between each `Tuv` element of a given `Tu` element.
+    Facilitates the pairing of allied codes in source and target text,
+    even if the order of code occurrence differs between the two because of
+    the translation syntax. Note that an `Ept` element is matched based
+    on the x attribute of its corresponding `Bpt` element.
+    ## type: str
+    The kind of data the element represents.
+
+    ## Contents:
+    A MutableSequence of strings, `Sub`, `Bpt`, `Ept`, `It`, `Ph` or `Hi`.
+
     """
 
     _content: MutableSequence[Bpt | Ept | Ph | It | Ut | Self | str]
@@ -413,21 +354,9 @@ class Hi(TmxElement):
         elif content is not None:
             self._content.extend(content)
 
-    def iter(
-        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
-    ) -> Generator[TmxElement | str, None, None]:
-        for item in self._content:
-            if isinstance(item, str):
-                if str in mask:
-                    yield item
-            else:
-                yield from item.iter(mask)
-
 
 class Sub(TmxElement):  # type: ignore
     """
-    <sub>
-
     Sub-flow - The `Sub` element is used to delimit sub-flow text inside
     a sequence of native code,
     for example: the definition of a footnote or the text of
@@ -437,17 +366,19 @@ class Sub(TmxElement):  # type: ignore
     interoperability issues when one tool uses sub-flow within its main segment,
     while another extract the sub-flow text as an independent segment.
 
-    Required attributes:
-    ---- None
-
-    Optional attributes:
-    ----
-        * type: str -- the kind of data the element represents.
-        * datatype: str -- the type of data contained in the element.
-
-    Contents: A list of strings, `Sub`, `Bpt`, `Ept`, `It`, `Ph` or `Hi`.
-
     Note: each `Bpt` element must have a subsequent corresponding `Ept` element.
+
+    ## Required attributes:
+    None
+    ## Optional attributes:
+    #### type: str
+    The kind of data the element represents.
+    datatype: str
+    The type of data contained in the element.
+
+    ## Contents:
+    A MutableSequence of strings, `Sub`, `Bpt`, `Ept`, `It`, `Ph` or `Hi`.
+
     """
 
     _content: MutableSequence[Bpt | Ept | Ph | It | Ut | Self | Hi | str]
@@ -488,13 +419,3 @@ class Sub(TmxElement):  # type: ignore
                         self._content.append(item.tail)
         elif content is not None:
             self._content.extend(content)
-
-    def iter(
-        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
-    ) -> Generator[TmxElement | str, None, None]:
-        for item in self._content:
-            if isinstance(item, str):
-                if str in mask:
-                    yield item
-            else:
-                yield from item.iter(mask)

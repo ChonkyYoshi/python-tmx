@@ -8,7 +8,6 @@ from typing import (
     Literal,
     MutableSequence,
     Optional,
-    Type,
     override,
 )
 
@@ -27,8 +26,6 @@ __all__ = ["Header", "Seg", "Tmx", "Tu", "Tuv", "Prop", "Note", "Map", "Ude"]
 
 class Prop(TmxElement):
     """
-    <prop>
-
     Property - The `Prop` element is used to define the various properties of
     its parent element (or of the document when used in the `Header` element).
     These properties are not defined by the standard.
@@ -42,27 +39,28 @@ class Prop(TmxElement):
     values of the properties it uses. If the tool exports unpublished
     properties types, their values should begin with the prefix "x-".
 
-    Required attributes:
-    ----
-        ####  type: str
-         the kind of data the element represents.
+    ## Required attributes:
+    #### type: str
+    The kind of data the element represents.
+    ## text: str
+    The actual contents of the element. The _content attribute should always be
+    set to an empty list.
 
-    Optional attributes:
-    ----
-        ####  xmllang: str
-         the locale of the element's content.
-        A language code as described in the [RFC 3066].
-        This declared value is considered to apply to all elements within
-        the content of the element where it is specified, unless overridden
-        with another instance of the xml:lang attribute.
-        Unlike the other TMX attributes, the values for xml:lang are not
-        case-sensitive.
-        Note: PythonTmx currently DOES NOT checks that the value for xmllang is
-        a correct language code. If you want this feature, please open an issue
-        on GitHub.
-        * oencoding str -- the original or preferred code set of the data
+    ## Optional attributes:
+    #### xmllang: str
+    The locale of the element's content.
+    A language code as described in the [RFC 3066].
+    This declared value is considered to apply to all elements within
+    the content of the element where it is specified, unless overridden
+    with another instance of the xml:lang attribute.
+    Unlike the other TMX attributes, the values for xml:lang are not
+    case-sensitive.
 
-    Contents: a str
+    Note: PythonTmx currently DOES NOT checks that the value for xmllang is
+    a correct language code, simply that the value is a str.
+    ## oencoding str -- the original or preferred code set of the data
+
+    Contents: None
     """
 
     text: str
@@ -108,38 +106,31 @@ class Prop(TmxElement):
             )
         return super().__setattr__(name, value)
 
-    def iter(
-        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
-    ) -> Generator[TmxElement | str, None, None]:
-        if str in mask:
-            yield self.text
-
 
 class Note(TmxElement):
     """
-    <note>
-
     Note - The `Note` element is used for comments.
 
-    Required attributes:
-    ---- None.
+    ## Required attributes:
+    ### text: str
+    The actual contents of the element. The _content attribute should always be
+    set to an empty list.
 
-    Optional attributes:
-    ----
-        ####  xmllang: str
-         the locale of the element's content.
-        A language code as described in the [RFC 3066].
-        This declared value is considered to apply to all elements within
-        the content of the element where it is specified, unless overridden
-        with another instance of the xml:lang attribute.
-        Unlike the other TMX attributes, the values for xml:lang are not
-        case-sensitive.
-        Note: PythonTmx currently DOES NOT checks that the value for xmllang is
-        a correct language code. If you want this feature, please open an issue
-        on GitHub.
-        * oencoding str -- the original or preferred code set of the data
+    ## Optional attributes:
+    #### xmllang: str
+    The locale of the element's content.
+    A language code as described in the [RFC 3066].
+    This declared value is considered to apply to all elements within
+    the content of the element where it is specified, unless overridden
+    with another instance of the xml:lang attribute.
+    Unlike the other TMX attributes, the values for xml:lang are not
+    case-sensitive.
 
-    Contents: a str
+    Note: PythonTmx currently DOES NOT checks that the value for xmllang is
+    a correct language code, simply that the value is a str.
+    ## oencoding str -- the original or preferred code set of the data
+
+    Contents: None
     """
 
     text: str
@@ -182,42 +173,32 @@ class Note(TmxElement):
             )
         return super().__setattr__(name, value)
 
-    def iter(
-        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
-    ) -> Generator[TmxElement | str, None, None]:
-        if str in mask:
-            yield self.text
-
 
 class Map(TmxElement):
     """
-    <map/>
-
     Map - The `Map` element is used to specify a user-defined character and
     some of its properties.
-
-    Required attributes:
-    ----
-        ####  unicode: str
-          Unicode character value of a <map/> element.
-        Its value must be a valid Unicode value (including values in the
-        Private Use areas) in hexadecimal format. For example: unicode="#xF8FF".
-
-    Optional attributes:
-    ----
-        ####  code: str
-         The code-point value corresponding to the unicode
-        character of a given `Map` element. A Hexadecimal value prefixed with
-        "#x". For example: code="#x9F".
-        ####  ent: str
-         the entity name of the character of a given `Map` element
-        ####  subst: str
-         an alternative string for the character defined in a
-        given `Map` element
 
     Note: at least one of the optional attributes should be specified.
     If the code attribute is specified, the parent `Ude` element must specify
     a base attribute.
+
+    Note: This element is always empty.
+
+    ## Required attributes:
+    #### unicode: str
+    Unicode character value of a `Map` element.
+    Its value must be a valid Unicode value (including values in the Private
+    Use areas) in hexadecimal format. For example: unicode="#xF8FF".
+
+    ## Optional attributes:
+    #### code: str
+    The code-point value corresponding to the unicode character.
+    A Hexadecimal value prefixed with "#x". For example: code="#x9F".
+    #### ent: str
+    The entity name of the character of a given `Map` element.
+    #### subst: str
+    An alternative string for the character.
 
     Contents: None
     """
@@ -253,39 +234,36 @@ class Map(TmxElement):
             )
         return super().__setattr__(name, value)
 
-    def iter(self):
-        return
-
 
 class Ude(TmxElement):
     """
-    <ude>
-
     User-Defined Encoding - The `Ude` element is used to specify a set of
     user-defined characters and/or, optionally their mapping
     from Unicode to the user-defined encoding.
 
     Note: PythonTmx DOES NOT make use of the encoding defined in `Ude` and `Map`.
-    These are purely for use by CAT Tools.
+    These are purely for use by external Tools.
 
-    Required attributes:
-    ----
-        ####  name: str
-         the name of a `Ude` element. Its value is not defined
-        by the standard, but tools providers should publish the values they use.
+    ## Required attributes:
+    #### name: str
+    The name of a `Ude` element. Its value is not defined by the standard
+    but tools providers should publish the values they use.
+    #### maps: MutableSequence[Map]
+    The actual contents of the element. The _content attribute should always be
+    set to an empty list.
 
-    Optional attributes:
-    ----
-        ####  base: str
-         the encoding upon which the re-mapping of the `Ude`
-        element is based.
-        Note: required if one or more of the `Map` elements contains a
-        code attribute
 
-    Contents: a list `Map` elements
+    ## Optional attributes:
+    #### base: str
+    The encoding upon which the re-mapping of the `Ude` element is based.
+
+    Note: required if one or more of the `Map` elements contains a code attribute
+
+    ## Contents:
+    None
     """
 
-    maps: list[Map]
+    maps: MutableSequence[Map]
     name: str
     base: Optional[str]
     _required_attributes = (TmxAttributes.name,)
@@ -325,52 +303,45 @@ class Ude(TmxElement):
             )
         return super().__setattr__(name, value)
 
-    def iter(
-        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
-    ) -> Generator[TmxElement | str, None, None]:
-        if Map in mask or TmxElement in mask:
-            yield from self.maps
-
 
 class Header(TmxElement):
     """
-    <header>
-
     File header - The `Header` element contains information pertaining
     to the whole document.
 
     ## Required attributes:
-    ####  creationtool: str
+    #### creationtool: str
     The tool that created the TMX document.
-    ####  creationtoolversion: str
+    #### creationtoolversion: str
     The version of the tool that created the TMX document.
-    ####  segtype: "block" | "paragraph" | "sentence" | "phrase"
+    #### segtype: "block" | "paragraph" | "sentence" | "phrase"
     The kind of segmentation used in the `Tu` element.
-    ####  otmf: str
+    #### otmf: str
     The format of the translation memory file from which the TMX documen
     or segment thereof have been generated.
-    ####  adminlang: str
+    #### adminlang: str
     The default language for the administrative and informative elements
     `Note` and `Prop`.
-    ####  srclang: str
+    #### srclang: str
     The language of the source text.
     Can be set to "*all*" if any language inside a tu can be used a source.
-    ####  datatype: str
+    #### datatype: str
     The type of data
 
     ## Optional attributes:
     #### oencoding: str
     The original or preferred code set of the data
-    ####  creationdate: str | datetime
+    #### creationdate: str | datetime
     The date of creation of the element.
-    ####  creationid: str
+    #### creationid: str
     The identifier of the user who created the element
-    ####  changedate: str | datetime
+    #### changedate: str | datetime
     The date of the last modification of
     #### changeid: str
     The identifier of the user who modified the element last
 
-    ## Contents: None
+    ## Contents:
+    None
     """
 
     _required_attributes = (
@@ -471,18 +442,25 @@ class Header(TmxElement):
             )
         return super().__setattr__(name, value)
 
-    def iter(
-        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
-    ) -> Generator[TmxElement | str, None, None]:
-        if Note in mask or TmxElement in mask:
-            yield from self.notes
-        if Prop in mask or TmxElement in mask:
-            yield from self.props
-        if Ude in mask or TmxElement in mask:
-            yield from self.udes
-
 
 class Seg(TmxElement):
+    """
+    Segment - The `Seg` element contains the text of the given segment.
+    There is no length limitation to the content of a `Seg` element.
+    All spacing and line-breaking characters are significant within a `Seg`
+    element.
+
+    Note: each `Bpt` element must have a subsequent corresponding `Ept` element.
+
+    ## Required attributes:
+    None
+    ## Optional attributes:
+    None
+
+    ## Contents:
+    A MutableSequence of strings, `Sub`, `Bpt`, `Ept`, `It`, `Ph` or `Hi`.
+    """
+
     _allowed_content = str, Sub, Ut, Ph, It, Hi, Bpt, Ept
     _required_attributes = tuple()
     _optional_attributes = tuple()
@@ -522,18 +500,59 @@ class Seg(TmxElement):
     def __iter__(self) -> Generator[str | TmxElement, None, None]:
         yield from self._content
 
-    def iter(
-        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
-    ) -> Generator[TmxElement | str, None, None]:
-        for item in self:
-            if isinstance(item, str):
-                if str in mask:
-                    yield item
-            else:
-                yield from item.iter(mask)
-
 
 class Tuv(TmxElement):
+    """
+    Translation Unit Variant - The `Tuv` element specifies text
+    in a given language.
+
+    ## Required attributes
+    ## segment: Seg
+    The actual contents of the element. The _content attribute should always be
+    set to an empty list.
+    #### xmllang: str
+    The locale of the element's content.
+    A language code as described in the [RFC 3066].
+    This declared value is considered to apply to all elements within
+    the content of the element where it is specified, unless overridden
+    with another instance of the xml:lang attribute.
+    Unlike the other TMX attributes, the values for xml:lang are not
+    case-sensitive.
+
+    Note: PythonTmx currently DOES NOT checks that the value for xmllang is
+    a correct language code, simply that the value is a str.
+
+    ## Optional attributes:
+    #### oencoding: str
+    The original or preferred code set of the data
+    #### datatype: str
+    The type of data
+    #### usagecount: int | str
+    The number of times the element has been accessed in the original TM
+    environment
+    #### lastusagedate: str | datetime
+    The last time the content of the element was used in the original
+    translation memory environment.
+    #### creationtool: str
+    The tool that created the TMX document.
+    #### creationtoolversion: str
+    The version of the tool that created the TMX document.
+    #### creationdate: str | datetime
+    The date of creation of the element.
+    #### creationid: str
+    The identifier of the user who created the element
+    #### changedate: str | datetime
+    The date of the last modification of
+    #### changeid: str
+    The identifier of the user who modified the element last
+    #### otmf: str
+    The format of the translation memory file from which the TMX documen
+    or segment thereof have been generated.
+
+    ## Contents:
+    None
+    """
+
     _required_attributes = (TmxAttributes.xmllang,)
     _optional_attributes = (
         TmxAttributes.oencoding,
@@ -633,19 +652,58 @@ class Tuv(TmxElement):
             )
         return super().__setattr__(name, value)
 
-    def iter(
-        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
-    ) -> Generator[TmxElement | str, None, None]:
-        if Note in mask or TmxElement in mask:
-            yield from self.notes
-        if Prop in mask or TmxElement in mask:
-            yield from self.props
-        if Seg in mask or TmxElement in mask:
-            yield self.segment
-        yield from self.segment.iter(mask)
-
 
 class Tu(TmxElement):
+    """
+    Translation unit - The `Tu` element contains the data for a given
+    translation unit.
+
+    ## Required attributes
+    ## tuvs: MutableSequence[Tuv]
+    The actual contents of the element. The _content attribute should always be
+    set to an empty list.
+
+    Note: PythonTmx currently DOES NOT checks that the value for xmllang is
+    a correct language code, simply that the value is a str.
+
+    ## Optional attributes:
+    #### tuid: int | str:
+    The identifier for the `Tu` element
+    #### oencoding: str
+    The original or preferred code set of the data
+    #### datatype: str
+    The type of data
+    #### usagecount: int | str
+    The number of times the element has been accessed in the original TM
+    environment
+    #### lastusagedate: str | datetime
+    The last time the content of the element was used in the original
+    translation memory environment.
+    #### creationtool: str
+    The tool that created the TMX document.
+    #### creationtoolversion: str
+    The version of the tool that created the TMX document.
+    #### creationdate: str | datetime
+    The date of creation of the element.
+    #### creationid: str
+    The identifier of the user who created the element
+    #### changedate: str | datetime
+    The date of the last modification of
+    #### segtype: "block" | "paragraph" | "sentence" | "phrase"
+    The kind of segmentation used in the `Tu` element.
+    #### changeid: str
+    The identifier of the user who modified the element last
+    #### otmf: str
+    The format of the translation memory file from which the TMX documen
+    or segment thereof have been generated.
+    #### srclang: str
+    The language of the source text.lang: str
+
+
+    ## Contents:
+    None
+    """
+
     _required_attributes = tuple()
     _optional_attributes = (
         TmxAttributes.tuid,
@@ -754,20 +812,28 @@ class Tu(TmxElement):
             )
         return super().__setattr__(name, value)
 
-    def iter(
-        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
-    ) -> Generator[TmxElement | str, None, None]:
-        if Note in mask or TmxElement in mask:
-            yield from self.notes
-        if Prop in mask or TmxElement in mask:
-            yield from self.props
-        for item in self.tuvs:
-            if Tuv in mask or TmxElement in mask:
-                yield item
-            yield from item.iter(mask)
-
 
 class Tmx(TmxElement):
+    """
+    Translation Memory Exchange - The Python object representation of a Tmx file.
+
+    ## Required attributes:
+    #### header: Header
+    A `Header`element that has info over the whole file.
+    #### tus: MutableSequence[Tu]
+    The actual contents of the element. The _content attribute should always be
+    set to an empty list.
+    #### version: str = "1.4"
+    The version of the TMX Standard the file follows. PythonTmx currently only
+    support 1.4b
+
+    ## Optional attributes:
+    None
+
+    ## Content:
+    None
+    """
+
     _allowed_content = ()
     _required_attributes = (TmxAttributes.version,)
     _optional_attributes = tuple()
@@ -779,7 +845,7 @@ class Tmx(TmxElement):
         self,
         source_element: Optional[_Element] = None,
         header: Optional[Header] = None,
-        content: Optional[Iterable[Tu]] = None,
+        tus: Optional[Iterable[Tu]] = None,
     ) -> None:
         super().__init__(source_element=source_element)
         self.tus = []
@@ -797,8 +863,8 @@ class Tmx(TmxElement):
                     if item.tag == "header":
                         self.header = Header(item)
             else:
-                if content is not None:
-                    self._content.extend(content)
+                if tus is not None:
+                    self._content.extend(tus)
                     if header is not None:
                         self.header = header
                     else:
@@ -813,14 +879,6 @@ class Tmx(TmxElement):
             )
         return super().__setattr__(name, value)
 
-    def iter(
-        self, mask: Type[Any] | tuple[Type[Any], ...] = (TmxElement, str)
-    ) -> Generator[TmxElement | str, None, None]:
-        for item in self.tus:
-            if Tu in mask or TmxElement in mask:
-                yield item
-            yield from item.iter(mask)
-
     @override
     def to_element(self) -> _Element:
         elem = Element("tmx", version=self.version)
@@ -832,6 +890,13 @@ class Tmx(TmxElement):
         return elem
 
     def export_to_file(self, file: str | bytes | PathLike | StringIO | BytesIO) -> None:
+        """
+        Writes the element to a file using lxml.
+
+        Arguments:
+            file {str | bytes | PathLike | StringIO | BytesIO} -- A valid file
+            path or file descriptor, or IO.
+        """
         ElementTree(self.to_element()).write(
             file,
             xml_declaration=True,

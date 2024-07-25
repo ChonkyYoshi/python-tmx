@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from abc import abstractmethod
 from datetime import datetime
 from enum import Enum
+from logging import warn
 from typing import ClassVar, Generator, MutableSequence, Optional, Type
 
 from lxml.etree import Element, _Element
@@ -147,9 +147,13 @@ class TmxElement:
                     if not isinstance(value, datetime):
                         try:
                             value = datetime.strptime(value, r"%Y%m%dT%H%M%SZ")
-                        except (ValueError, TypeError) as e:
+                        except ValueError:
+                            warn(
+                                f"Value for attribute {attribute.name} is recommended to be in the format of YYYYMMDDTHHMMSSZ but got {value}"
+                            )
+                        except TypeError as e:
                             raise TmxError(
-                                f"Value for attribute {attribute.name} must be a datetime object or a str in the format of YYYYMMDDTHHMMSSZ but got {value} of type '{value.__class__.__name__}'"
+                                f"Value for attribute {attribute.name} must be a datetime object or a str"
                             ) from e
                     xml_attributes[attribute.value] = value.strftime(r"%Y%m%dT%H%M%SZ")
                 case TmxAttributes.assoc:
@@ -239,11 +243,12 @@ class TmxElement:
         Converts a tmx element to a valid lxml element.
 
         Raises a TmxError if:
-            * the element contains unauthorized children (e.g. Ude elements in
-            a Tu element)
-            * The element has an imbalanced count of Ept and Bpt elements
-            * an Ude element doesn't have a base attribute when one of its Map
+            * the element contains unauthorized children (e.g. `Ude` elements in
+            a `Tu` element)
+            * The element has an imbalanced count of `Ept` and `Bpt` elements
+            * an `Ude` element doesn't have a base attribute when one of its Map
             elements has a 'code' attribute
+            * a `Map`element doesn't have one of its optional attributes set
 
         Returns an lxml element that represents that tmx element
         """
@@ -262,6 +267,10 @@ class TmxElement:
                 elem.append(ude.to_element())
         if hasattr(self, "maps"):
             for map_ in self.maps:
+                if not map_.code and not map_.ent and not map_.subst:
+                    raise TmxError(
+                        "At least one the optional element of a `Map` element must be set"
+                    )
                 elem.append(map_.to_element())
         if hasattr(self, "text"):
             elem.text = self.text
@@ -307,16 +316,30 @@ class TmxElement:
                 )
         return elem
 
-    @abstractmethod
-    def iter(self, mask) -> Generator[TmxElement | str, None, None]:
+    def iter(
+        self, mask: Type | tuple[Type, ...] = object
+    ) -> Generator[TmxElement | str, None, None]:
         """
-        Recursively iterates over all the contents of the element and yields
-        any item whose type is in mask. if mask is None, yields everything.
-
-        Keyword Arguments:
-            mask {Optional[Type  |  tuple[Type]]} -- the types to look for. If
-            None, yields everything.
-
-        Yields:
-            Any descendant element whose type matches the mask
+        Recursively iterates over all the contents of the element in order
+        and yields any element whose type matches mask.
+        If mask is `object`, yields everything.
         """
+        if hasattr(self, "header"):
+            if isinstance(getattr(self, "header"), mask):
+                yield from getattr(self, "header").iter(mask)
+        for attr in ("props", "notes", "udes", "maps", "tus", "tuvs"):
+            if hasattr(self, attr):
+                for item in getattr(self, attr):
+                    if isinstance(item, mask):
+                        yield item
+                    if isinstance(item, TmxElement):
+                        yield from item.iter(mask)
+        if hasattr(self, "segment"):
+            if isinstance(getattr(self, "segment"), mask):
+                yield getattr(self, "segment")
+            yield from getattr(self, "segment").iter(mask)
+        for item in self._content:
+            if isinstance(item, mask):
+                yield item
+            if isinstance(item, TmxElement):
+                yield from item.iter(mask)
