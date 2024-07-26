@@ -87,6 +87,7 @@ class TmxElement:
                 )
             else:
                 val = kwargs.get(attribute.name, None)
+            self.__setattr__(attribute.name, val)
             match attribute:
                 case TmxAttributes.i | TmxAttributes.x | TmxAttributes.usagecount:
                     try:
@@ -103,7 +104,7 @@ class TmxElement:
                             attribute.name, datetime.strptime(val, r"%Y%m%dT%H%M%SZ")
                         )
                     except (ValueError, TypeError):
-                        self.__setattr__(attribute.name, val)
+                        pass
 
     def xml_attrib(self) -> dict[str, str]:
         """

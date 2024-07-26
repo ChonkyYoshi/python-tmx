@@ -13,13 +13,13 @@ from typing import (
 
 from lxml.etree import Element, ElementTree, _Element
 
-from PythonTmx.core.base import (
+from PythonTmx.base import (
     ExtraTailError,
     ExtraTextError,
     TmxAttributes,
     TmxElement,
 )
-from PythonTmx.core.inline import Bpt, Ept, Hi, It, Ph, Sub, Ut
+from PythonTmx.inline import Bpt, Ept, Hi, It, Ph, Sub, Ut
 
 __all__ = ["Header", "Seg", "Tmx", "Tu", "Tuv", "Prop", "Note", "Map", "Ude"]
 
@@ -862,13 +862,16 @@ class Tmx(TmxElement):
                                 self.tus.append(Tu(tu))
                     if item.tag == "header":
                         self.header = Header(item)
-            else:
-                if tus is not None:
-                    self._content.extend(tus)
-                    if header is not None:
-                        self.header = header
-                    else:
-                        self.header = Header()
+        else:
+            if tus is not None:
+                self._content.extend(tus)
+                if header is not None:
+                    self.header = header
+                else:
+                    self.header = Header()
+
+    def __iter__(self) -> Generator[Tu, None, None]:
+        yield from self.tus
 
     @override
     def __setattr__(self, name: str, value: Any) -> None:

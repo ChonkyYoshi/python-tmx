@@ -2,7 +2,7 @@ from typing import Literal, MutableSequence, Optional, Self
 
 from lxml.etree import _Element
 
-from PythonTmx.core.base import TmxAttributes, TmxElement
+from PythonTmx.base import TmxAttributes, TmxElement
 
 __all__ = ["Bpt", "Ept", "Hi", "It", "Ph", "Sub", "Ut"]
 
