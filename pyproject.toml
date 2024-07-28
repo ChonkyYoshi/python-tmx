@@ -2,7 +2,7 @@
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 [project]
-name = "python-tmx"
+name = "PythonTmx"
 version = "0.2"
 authors = [{ name = "Enzo Agosta", email = "agosta.enzowork@gmail.com" }]
 description = "Python library for manipulating, creating and editing tmx files"
@@ -20,7 +20,7 @@ classifiers = [
 dependencies = ["lxml"]
 
 [project.optional-dependencies]
-dev = ["mypy", "types-lxml", "setuptools"]
+dev = ["mypy", "lxml-stubs", "setuptools"]
 
 
 [project.urls]

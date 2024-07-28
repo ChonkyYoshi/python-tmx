@@ -1,71 +1,67 @@
 # Overview
 
-python-tmx is a library meant to make dealing with tmx
-(Translation Memory Exchange) files easier and more pythonic than just using
-a xml parser.
-It is based on lxml under the hood and tries to follow the TMX 1.4b standard as
-much as possible.
+PythonTmx is a Python library that aims to make dealing with tmx files in Python
+easier.
+
+Every tmx element from the TMX 1.4b standard is represented (including the
+deprecated <ut> element for compatibility).
+
+To create a Tmx Element, you can either create it from scratch and set its
+attributes using keyword arguments, or you can also give it a lxml element to
+parse and use a base. If you give both an lxml element and keyword arguments
+the values parsed from the element will take precedence and the keywords
+argument values will be used as a fallback.
 
 # Installing
 
-Simply download it from pypi:
+Simply download from Pypi and install using pip:
 
-```python
-pip install -U python-tmx
+```bash
+pip install --upgrade PythonTmx
 ```
 
-# Basics
+# Basic usage
 
-Every possible tmx element is represented as an object with the same name but in
-Title case (i.e. a <header> is a `Header`, a <tuv> is a `Tuv`...).
-Every element inherits from the base `TmxElement` class and thus share the
-following methods:
-
-### to_element()
-
-This converts the element into an lxml `_Element` object. If the
-element has children it will also recursively call `to_element` on all of those
-as well, keeping the hierarchy to return an accurate representation of the element.
-
-For example, calling `to_element` on a `Tu` object will also call `to_element`
-on all its `Prop`, `Note` and `Tuv` objects, as well as on any `Prop`, `Note`
-and the `Seg` element of those `Tuv`.
-
-### make_xml_attrib()
-
-Called automatically when calling `to_element` this methods will convert an
-element's attributes to a dict that can be used by used by lxml.
-
-It will raise an Error if:
-
-- a required attribute has a value of None
-- an attribute has a forbidden value
-- an attribute has a value of a type that is not a str and not one of the
-  currently allowed alternative (see the docs for each object to know the allowed
-  types for each attribute)
-
-## Tmx
-
-It is the top most parent object and the only object with a `export_to_file`
-method available.
-
-It contains 2 main parts:
-
-- a `Header` object, accesible through the `header` attribute
-- a list (or any Mutable Sequence if you wish to use something else)
-  of `Tu` objects, accessible through the `tus` attribute
-
-You can iterate over the all `Tu` objects of an element by treating it as an
-iterable and using a for loop on it:
+You can create a `Tmx` object by reading a tmx file. From there, you can just
+iterate over each tu, and further each tuv, do any processing needed and then
+just export it back to another file.
 
 ```python
-import PythonTmx as tmx
-tmx_obj:tmx.Tmx = tmx.read_from_file("tmx_file.tmx")
-for tu in tmx:
-  # do something
-# OR
-for tu in tmx.iter(Tu):
-  # do something
-```
+from datetime import UTC, datetime
 
-## Header
+from PythonTmx import from_tmx
+from PythonTmx.inline import Ph
+
+# Create Tmx object from a tmx file
+tmx_file = from_tmx("tmx_file.tmx")
+# Loop over all Tu
+for tu in tmx_file:
+    # Set the Tu's source language to English
+    tu.srclang = "EN"
+    # Loop over all Tuv and check the language
+    for tuv in tu.tuvs:
+        match tuv.xmllang:
+            case "EN":
+                # If Tuv is in English, add _English at the end
+                tuv.segment.append("_English")
+            case "FR":
+                # If it's French, add a Ph that says "_French"
+                # at the start
+                tuv.segment.insert(0, Ph(content="_French"))
+            case _:
+                # Remove the Tuv otherwise
+                tu.tuvs.remove(tuv)
+        # Add a prop to the Tuv and set the changedate to today
+        tuv.add_prop(type="x-confidential", text="True")
+        tuv.changedate = datetime.now(UTC)
+    # Remove all notes that don't start with "Hello"
+    # and also add a new one and set the changedate to today
+    for note in tu.notes:
+        if not note.text.startswith("Hello"):
+            tu.remove_note(note)
+    tu.add_note(text="adding a note here, huge success")
+    tu.changedate = datetime.now(UTC)
+# Export Tmx to a tmx file and to a csv file
+tmx_file.to_tmx("bilingual_tmx_file.tmx")
+tmx_file.to_csv("bilingual.csv")
+```

@@ -71,8 +71,6 @@ class TmxElement:
     _allowed_content: ClassVar[tuple[Type, ...]]
 
     def __init__(self, **kwargs) -> None:
-        # only takes care of setting attributes, parsing source_element's content
-        # is done in each subclass individually
         source_element: Optional[_Element] = kwargs.get("source_element", None)
         self.__dict__["_content"] = []
         if (
@@ -258,14 +256,11 @@ class TmxElement:
         base, code = False, False
         elem.text = ""
         if hasattr(self, "props"):
-            for prop in self.props:
-                elem.append(prop.to_element())
+            elem.extend([prop.to_element() for prop in self.props])
         if hasattr(self, "notes"):
-            for note in self.notes:
-                elem.append(note.to_element())
+            elem.extend([note.to_element() for note in self.notes])
         if hasattr(self, "udes"):
-            for ude in self.udes:
-                elem.append(ude.to_element())
+            elem.extend([ude.to_element() for ude in self.udes])
         if hasattr(self, "maps"):
             for map_ in self.maps:
                 if not map_.code and not map_.ent and not map_.subst:
@@ -278,7 +273,9 @@ class TmxElement:
             return elem
         if hasattr(self, "segment"):
             elem.append(self.segment.to_element())
-        else:
+        if hasattr(self, "tuvs"):
+            elem.extend([tuv.to_element() for tuv in self.tuvs])
+        if self._content is not None:
             for item in self._content:
                 match item:
                     case x if type(x) not in self._allowed_content:

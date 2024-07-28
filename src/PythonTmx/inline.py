@@ -2,7 +2,7 @@ from typing import Literal, MutableSequence, Optional, Self
 
 from lxml.etree import _Element
 
-from PythonTmx.base import TmxAttributes, TmxElement
+from .base import TmxAttributes, TmxElement
 
 __all__ = ["Bpt", "Ept", "Hi", "It", "Ph", "Sub", "Ut"]
 
@@ -21,8 +21,8 @@ class Bpt(TmxElement):
     Used to pair a `Bpt` elements with `Ept` elements.
     Provides support to markup a possibly overlapping range of codes.
 
-    ## ## Optional attributes:
-    ###int | str
+    ## Optional attributes:
+    #### i: int | str
     Used to pair elements between each `Tuv` element of a given `Tu` element.
     Facilitates the pairing of allied codes in source and target text,
     even if the order of code occurrence differs between the two because of
@@ -32,7 +32,7 @@ class Bpt(TmxElement):
     The kind of data the element represents.
 
     ## Contents
-    A MutableSequence of strings and `Sub` elements
+    A MutableSequence of `str` and `Sub` elements
     """
 
     _content: MutableSequence[Sub | str]
@@ -84,7 +84,7 @@ class Ept(TmxElement):
     None
 
     ## Contents:
-    A MutableSequence of strings and `Sub` elements
+    A MutableSequence of `str` and `Sub` elements
     """
 
     _content: MutableSequence[Sub | str]
@@ -136,7 +136,7 @@ class It(TmxElement):
     The kind of data the element represents.
 
     ## Contents:
-    A MutableSequence of strings and `Sub` elements
+    A MutableSequence of `str` and `Sub` elements
     """
 
     _content: MutableSequence[Sub | str]
@@ -197,7 +197,7 @@ class Ph(TmxElement):
     - "b": the element is associated with the text on both sides
 
     ## Contents:
-    A MutableSequence of strings and `Sub` elements
+    A MutableSequence of `str` and `Sub` elements
     """
 
     _content: MutableSequence[Sub | str]
@@ -254,7 +254,7 @@ class Ut(TmxElement):
     on the x attribute of its corresponding `Bpt` element.
 
     ## Contents:
-    A MutableSequence of strings and `Sub` elements
+    A MutableSequence of `str` and `Sub` elements
     """
 
     _content: MutableSequence[Sub | str]
@@ -310,7 +310,7 @@ class Hi(TmxElement):
     The kind of data the element represents.
 
     ## Contents:
-    A MutableSequence of strings, `Sub`, `Bpt`, `Ept`, `It`, `Ph` or `Hi`.
+    A MutableSequence of `str`, `Sub`, `Bpt`, `Ept`, `It`, `Ph` or `Hi`.
 
     """
 
@@ -377,7 +377,7 @@ class Sub(TmxElement):  # type: ignore
     The type of data contained in the element.
 
     ## Contents:
-    A MutableSequence of strings, `Sub`, `Bpt`, `Ept`, `It`, `Ph` or `Hi`.
+    A MutableSequence of `str`, `Sub`, `Bpt`, `Ept`, `It`, `Ph` or `Hi`.
 
     """
 

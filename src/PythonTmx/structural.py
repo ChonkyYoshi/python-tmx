@@ -1,5 +1,5 @@
+from csv import writer
 from datetime import datetime
-from io import BytesIO, StringIO
 from os import PathLike
 from typing import (
     Any,
@@ -11,15 +11,15 @@ from typing import (
     override,
 )
 
-from lxml.etree import Element, ElementTree, _Element
+from lxml.etree import Element, ElementTree, _Element, tostring
 
-from PythonTmx.base import (
+from .base import (
     ExtraTailError,
     ExtraTextError,
     TmxAttributes,
     TmxElement,
 )
-from PythonTmx.inline import Bpt, Ept, Hi, It, Ph, Sub, Ut
+from .inline import Bpt, Ept, Hi, It, Ph, Sub, Ut
 
 __all__ = ["Header", "Seg", "Tmx", "Tu", "Tuv", "Prop", "Note", "Map", "Ude"]
 
@@ -152,6 +152,7 @@ class Note(TmxElement):
             xmllang=xmllang,
             oencoding=oencoding,
         )
+        self.__dict__["_content"] = None
         if source_element is not None:
             if source_element.text is not None:
                 self.text = source_element.text
@@ -219,12 +220,14 @@ class Map(TmxElement):
         ent: Optional[str] = None,
         subst: Optional[str] = None,
     ) -> None:
-        super().__init__(unicode=unicode, code=code, ent=ent, subst=subst)
-        if source_element is not None:
-            if source_element.text:
-                raise ExtraTextError("map", source_element.text)
-            if source_element.tail:
-                raise ExtraTailError("map", source_element.tail)
+        super().__init__(
+            source_element=source_element,
+            unicode=unicode,
+            code=code,
+            ent=ent,
+            subst=subst,
+        )
+        self.__dict__["_content"] = None
 
     @override
     def __setattr__(self, name: str, value: Any) -> None:
@@ -258,9 +261,6 @@ class Ude(TmxElement):
     The encoding upon which the re-mapping of the `Ude` element is based.
 
     Note: required if one or more of the `Map` elements contains a code attribute
-
-    ## Contents:
-    None
     """
 
     maps: MutableSequence[Map]
@@ -273,7 +273,7 @@ class Ude(TmxElement):
     def __init__(
         self,
         source_element: Optional[_Element] = None,
-        content: Optional[MutableSequence[Map]] = None,
+        maps: Optional[MutableSequence[Map]] = None,
         name: Optional[str] = None,
         base: Optional[str] = None,
     ) -> None:
@@ -282,6 +282,8 @@ class Ude(TmxElement):
             name=name,
             base=base,
         )
+        self.maps = []
+        self.__dict__["_content"]
         if source_element is not None:
             if source_element.text:
                 raise ExtraTextError("ude", source_element.text)
@@ -291,17 +293,39 @@ class Ude(TmxElement):
                 for map_ in source_element:
                     self.maps.append(Map(map_))
             else:
-                if content is not None:
-                    self.maps.extend(content)
+                if maps is not None:
+                    self.maps.extend(maps)
 
-    @override
-    def __setattr__(self, name: str, value: Any) -> None:
-        if name == "_content":
-            raise ValueError(
-                "Ude elements are not allowed to have content. "
-                "Please use the 'maps' property instead"
-            )
-        return super().__setattr__(name, value)
+    def __iter__(self) -> Generator[Map, None, None]:
+        yield from self.maps
+
+    def add_map(
+        self,
+        unicode: str,
+        code: Optional[str] = None,
+        ent: Optional[str] = None,
+        subst: Optional[str] = None,
+    ) -> None:
+        self.maps.append(Map(unicode=unicode, code=code, ent=ent, subst=subst))
+
+    def insert_map(
+        self,
+        index: int,
+        unicode: str,
+        code: Optional[str] = None,
+        ent: Optional[str] = None,
+        subst: Optional[str] = None,
+    ) -> None:
+        self.maps.insert(index, Map(unicode=unicode, code=code, ent=ent, subst=subst))
+
+    def append(self, map: Map) -> None:
+        self.maps.append(map)
+
+    def insert(self, index: int, map: Map) -> None:
+        self.maps.insert(index, map)
+
+    def remove(self, map: Map) -> None:
+        self.maps.remove(map)
 
 
 class Header(TmxElement):
@@ -339,9 +363,6 @@ class Header(TmxElement):
     The date of the last modification of
     #### changeid: str
     The identifier of the user who modified the element last
-
-    ## Contents:
-    None
     """
 
     _required_attributes = (
@@ -411,7 +432,7 @@ class Header(TmxElement):
             changedate=changedate,
             changeid=changeid,
         )
-        self.notes, self.props, self.udes = [], [], []
+        self.notes, self.props, self.udes, self.__dict__["_content"] = [], [], [], None
         if source_element is not None:
             if source_element.text:
                 raise ExtraTextError("header", source_element.text)
@@ -442,6 +463,75 @@ class Header(TmxElement):
             )
         return super().__setattr__(name, value)
 
+    def __iter__(self) -> Generator[Ude, None, None]:
+        yield from self.udes
+
+    def add_prop(
+        self,
+        type: str,
+        text: str,
+        xmllang: Optional[str] = None,
+        oencoding: Optional[str] = None,
+    ) -> None:
+        self.props.append(
+            Prop(text=text, type=type, xmllang=xmllang, oencoding=oencoding)
+        )
+
+    def insert_prop(
+        self,
+        index: int,
+        type: str,
+        text: str,
+        xmllang: Optional[str] = None,
+        oencoding: Optional[str] = None,
+    ) -> None:
+        self.props.insert(
+            index, Prop(text=text, type=type, xmllang=xmllang, oencoding=oencoding)
+        )
+
+    def remove_prop(self, prop: Prop) -> None:
+        self.props.remove(prop)
+
+    def add_note(
+        self,
+        text: str,
+        xmllang: Optional[str] = None,
+        oencoding: Optional[str] = None,
+    ) -> None:
+        self.notes.append(Note(text=text, xmllang=xmllang, oencoding=oencoding))
+
+    def insert_note(
+        self,
+        index: int,
+        text: str,
+        xmllang: Optional[str] = None,
+        oencoding: Optional[str] = None,
+    ) -> None:
+        self.notes.insert(index, Note(text=text, xmllang=xmllang, oencoding=oencoding))
+
+    def remove_note(self, note: Note) -> None:
+        self.notes.remove(note)
+
+    def add_ude(
+        self,
+        name: str,
+        base: Optional[str] = None,
+        maps: Optional[MutableSequence[Map]] = None,
+    ) -> None:
+        self.udes.append(Ude(name=name, base=base, maps=maps))
+
+    def insert_ude(
+        self,
+        index: int,
+        name: str,
+        base: Optional[str] = None,
+        maps: Optional[MutableSequence[Map]] = None,
+    ) -> None:
+        self.udes.insert(index, Ude(name=name, base=base, maps=maps))
+
+    def remove_ude(self, ude: Ude) -> None:
+        self.udes.remove(ude)
+
 
 class Seg(TmxElement):
     """
@@ -456,9 +546,6 @@ class Seg(TmxElement):
     None
     ## Optional attributes:
     None
-
-    ## Contents:
-    A MutableSequence of strings, `Sub`, `Bpt`, `Ept`, `It`, `Ph` or `Hi`.
     """
 
     _allowed_content = str, Sub, Ut, Ph, It, Hi, Bpt, Ept
@@ -499,6 +586,14 @@ class Seg(TmxElement):
 
     def __iter__(self) -> Generator[str | TmxElement, None, None]:
         yield from self._content
+
+    def append(self, value: str | Sub | Ut | Ph | It | Hi | Bpt | Ept) -> None:
+        self._content.append(value)
+
+    def insert(
+        self, index: int, value: str | Sub | Ut | Ph | It | Hi | Bpt | Ept
+    ) -> None:
+        self._content.insert(index, value)
 
 
 class Tuv(TmxElement):
@@ -548,9 +643,6 @@ class Tuv(TmxElement):
     #### otmf: str
     The format of the translation memory file from which the TMX documen
     or segment thereof have been generated.
-
-    ## Contents:
-    None
     """
 
     _required_attributes = (TmxAttributes.xmllang,)
@@ -618,7 +710,7 @@ class Tuv(TmxElement):
             changeid=changeid,
             otmf=otmf,
         )
-        self.notes, self.props = [], []
+        self.notes, self.props, self.__dict__["_content"] = [], [], None
         self.segment = None  # type: ignore
         if source_element is not None:
             if source_element.text:
@@ -651,6 +743,57 @@ class Tuv(TmxElement):
                 "Please use the 'segment' property instead"
             )
         return super().__setattr__(name, value)
+
+    def __iter__(
+        self,
+    ) -> Generator[str | TmxElement, None, None]:
+        yield from self.segment
+
+    def add_prop(
+        self,
+        type: str,
+        text: str,
+        xmllang: Optional[str] = None,
+        oencoding: Optional[str] = None,
+    ) -> None:
+        self.props.append(
+            Prop(text=text, type=type, xmllang=xmllang, oencoding=oencoding)
+        )
+
+    def insert_prop(
+        self,
+        index: int,
+        type: str,
+        text: str,
+        xmllang: Optional[str] = None,
+        oencoding: Optional[str] = None,
+    ) -> None:
+        self.props.insert(
+            index, Prop(text=text, type=type, xmllang=xmllang, oencoding=oencoding)
+        )
+
+    def remove_prop(self, prop: Prop) -> None:
+        self.props.remove(prop)
+
+    def add_note(
+        self,
+        text: str,
+        xmllang: Optional[str] = None,
+        oencoding: Optional[str] = None,
+    ) -> None:
+        self.notes.append(Note(text=text, xmllang=xmllang, oencoding=oencoding))
+
+    def insert_note(
+        self,
+        index: int,
+        text: str,
+        xmllang: Optional[str] = None,
+        oencoding: Optional[str] = None,
+    ) -> None:
+        self.notes.insert(index, Note(text=text, xmllang=xmllang, oencoding=oencoding))
+
+    def remove_note(self, note: Note) -> None:
+        self.notes.remove(note)
 
 
 class Tu(TmxElement):
@@ -698,10 +841,6 @@ class Tu(TmxElement):
     or segment thereof have been generated.
     #### srclang: str
     The language of the source text.lang: str
-
-
-    ## Contents:
-    None
     """
 
     _required_attributes = tuple()
@@ -744,7 +883,7 @@ class Tu(TmxElement):
     def __init__(
         self,
         source_element: Optional[_Element] = None,
-        content: Optional[Iterable[Tuv]] = None,
+        tuvs: Optional[Iterable[Tuv]] = None,
         tuid: Optional[str] = None,
         xmllang: Optional[str] = None,
         oencoding: Optional[str] = None,
@@ -781,7 +920,7 @@ class Tu(TmxElement):
             otmf=otmf,
             srclang=srclang,
         )
-        self.notes, self.props, self.tuvs = [], [], []
+        self.notes, self.props, self.tuvs, self.__dict__["_content"] = [], [], [], None
         if source_element is not None:
             if source_element.text:
                 raise ExtraTextError("tu", source_element.text)
@@ -796,8 +935,8 @@ class Tu(TmxElement):
                     if item.tag == "prop":
                         self.props.append(Prop(item))
             else:
-                if content is not None:
-                    self.tuvs.extend(content)
+                if tuvs is not None:
+                    self.tuvs.extend(tuvs)
                 if props is not None:
                     self.props.extend(props)
                 if notes is not None:
@@ -811,6 +950,55 @@ class Tu(TmxElement):
                 "Please use the 'tuvs' property instead"
             )
         return super().__setattr__(name, value)
+
+    def __iter__(self) -> Generator[Tuv, None, None]:
+        yield from self.tuvs
+
+    def add_prop(
+        self,
+        type: str,
+        text: str,
+        xmllang: Optional[str] = None,
+        oencoding: Optional[str] = None,
+    ) -> None:
+        self.props.append(
+            Prop(text=text, type=type, xmllang=xmllang, oencoding=oencoding)
+        )
+
+    def insert_prop(
+        self,
+        index: int,
+        type: str,
+        text: str,
+        xmllang: Optional[str] = None,
+        oencoding: Optional[str] = None,
+    ) -> None:
+        self.props.insert(
+            index, Prop(text=text, type=type, xmllang=xmllang, oencoding=oencoding)
+        )
+
+    def remove_prop(self, prop: Prop) -> None:
+        self.props.remove(prop)
+
+    def add_note(
+        self,
+        text: str,
+        xmllang: Optional[str] = None,
+        oencoding: Optional[str] = None,
+    ) -> None:
+        self.notes.append(Note(text=text, xmllang=xmllang, oencoding=oencoding))
+
+    def insert_note(
+        self,
+        index: int,
+        text: str,
+        xmllang: Optional[str] = None,
+        oencoding: Optional[str] = None,
+    ) -> None:
+        self.notes.insert(index, Note(text=text, xmllang=xmllang, oencoding=oencoding))
+
+    def remove_note(self, note: Note) -> None:
+        self.notes.remove(note)
 
 
 class Tmx(TmxElement):
@@ -828,9 +1016,6 @@ class Tmx(TmxElement):
     support 1.4b
 
     ## Optional attributes:
-    None
-
-    ## Content:
     None
     """
 
@@ -892,7 +1077,7 @@ class Tmx(TmxElement):
             body.append(tu.to_element())
         return elem
 
-    def export_to_file(self, file: str | bytes | PathLike | StringIO | BytesIO) -> None:
+    def to_tmx(self, file: str | bytes | PathLike) -> None:
         """
         Writes the element to a file using lxml.
 
@@ -904,3 +1089,14 @@ class Tmx(TmxElement):
             file,
             xml_declaration=True,
         )
+
+    def to_csv(self, file: str | bytes | PathLike) -> None:
+        with open(file, "w", newline="") as f:
+            csv_writer = writer(f)
+            for tu in self:
+                csv_writer.writerow(
+                    [
+                        tostring(tuv.segment.to_element())[5:-6].decode()
+                        for tuv in tu.tuvs
+                    ]
+                )
