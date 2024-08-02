@@ -11,7 +11,7 @@ from typing import (
     override,
 )
 
-from lxml.etree import Element, ElementTree, _Element, tostring
+from lxml.etree import Element, ElementTree, _Element, _ElementTree, tostring
 
 from .base import (
     ExtraTailError,
@@ -85,17 +85,12 @@ class Prop(TmxElement):
             xmllang=xmllang,
             oencoding=oencoding,
         )
+        if text is None:
+            text = ""
         if source_element is not None:
-            if source_element.text is not None:
-                self.text = source_element.text
-            elif text is not None:
-                self.text = text
-            else:
-                self.text = str()
-        elif text is not None:
-            self.text = text
+            self.text = source_element.text if source_element.text is not None else text
         else:
-            self.text = str()
+            self.text = text
 
     @override
     def __setattr__(self, name: str, value: Any) -> None:
@@ -152,18 +147,12 @@ class Note(TmxElement):
             xmllang=xmllang,
             oencoding=oencoding,
         )
-        self.__dict__["_content"] = None
+        if text is None:
+            text = ""
         if source_element is not None:
-            if source_element.text is not None:
-                self.text = source_element.text
-            elif text is not None:
-                self.text = text
-            else:
-                self.text = str()
-        elif text is not None:
-            self.text = text
+            self.text = source_element.text if source_element.text is not None else text
         else:
-            self.text = str()
+            self.text = text
 
     @override
     def __setattr__(self, name: str, value: Any) -> None:
@@ -227,7 +216,6 @@ class Map(TmxElement):
             ent=ent,
             subst=subst,
         )
-        self.__dict__["_content"] = None
 
     @override
     def __setattr__(self, name: str, value: Any) -> None:
@@ -283,7 +271,6 @@ class Ude(TmxElement):
             base=base,
         )
         self.maps = []
-        self.__dict__["_content"]
         if source_element is not None:
             if source_element.text:
                 raise ExtraTextError("ude", source_element.text)
@@ -292,9 +279,8 @@ class Ude(TmxElement):
             if len(source_element):
                 for map_ in source_element:
                     self.maps.append(Map(map_))
-            else:
-                if maps is not None:
-                    self.maps.extend(maps)
+        if not len(self.maps) and maps is not None:
+            self.maps.extend(maps)
 
     def __iter__(self) -> Generator[Map, None, None]:
         yield from self.maps
@@ -432,7 +418,7 @@ class Header(TmxElement):
             changedate=changedate,
             changeid=changeid,
         )
-        self.notes, self.props, self.udes, self.__dict__["_content"] = [], [], [], None
+        self.notes, self.props, self.udes = [], [], []
         if source_element is not None:
             if source_element.text:
                 raise ExtraTextError("header", source_element.text)
@@ -446,13 +432,12 @@ class Header(TmxElement):
                         self.notes.append(Note(item))
                     if item.tag == "prop":
                         self.props.append(Prop(item))
-            else:
-                if udes is not None:
-                    self.udes.extend(udes)
-                if props is not None:
-                    self.props.extend(props)
-                if notes is not None:
-                    self.notes.extend(notes)
+        if not len(self.notes) and notes is not None:
+            self.notes.extend(notes)
+        if not len(self.props) and props is not None:
+            self.props.extend(props)
+        if not len(self.udes) and udes is not None:
+            self.udes.extend(udes)
 
     @override
     def __setattr__(self, name: str, value: Any) -> None:
@@ -710,8 +695,7 @@ class Tuv(TmxElement):
             changeid=changeid,
             otmf=otmf,
         )
-        self.notes, self.props, self.__dict__["_content"] = [], [], None
-        self.segment = None  # type: ignore
+        self.notes, self.props = [], []
         if source_element is not None:
             if source_element.text:
                 raise ExtraTextError("tuv", source_element.text)
@@ -720,20 +704,17 @@ class Tuv(TmxElement):
             if len(source_element):
                 for item in source_element:
                     if item.tag == "seg":
-                        if self.segment is not None:
-                            raise ValueError("Only one seg element per tuv")
                         self.segment = Seg(item)
                     if item.tag == "note":
                         self.notes.append(Note(item))
                     if item.tag == "prop":
                         self.props.append(Prop(item))
-            else:
-                if segment is not None:
-                    self.segment = segment
-                if props is not None:
-                    self.props.extend(props)
-                if notes is not None:
-                    self.notes.extend(notes)
+        if not hasattr(self, "segment"):
+            self.segment = segment if segment is not None else Seg()
+        if not len(self.notes) and notes is not None:
+            self.notes.extend(notes)
+        if not len(self.props) and props is not None:
+            self.props.extend(props)
 
     @override
     def __setattr__(self, name: str, value: Any) -> None:
@@ -920,7 +901,7 @@ class Tu(TmxElement):
             otmf=otmf,
             srclang=srclang,
         )
-        self.notes, self.props, self.tuvs, self.__dict__["_content"] = [], [], [], None
+        self.notes, self.props, self.tuvs = [], [], []
         if source_element is not None:
             if source_element.text:
                 raise ExtraTextError("tu", source_element.text)
@@ -934,13 +915,12 @@ class Tu(TmxElement):
                         self.notes.append(Note(item))
                     if item.tag == "prop":
                         self.props.append(Prop(item))
-            else:
-                if tuvs is not None:
-                    self.tuvs.extend(tuvs)
-                if props is not None:
-                    self.props.extend(props)
-                if notes is not None:
-                    self.notes.extend(notes)
+        if not len(self.tuvs) and tuvs is not None:
+            self.tuvs.extend(tuvs)
+        if not len(self.notes) and notes is not None:
+            self.notes.extend(notes)
+        if not len(self.props) and props is not None:
+            self.props.extend(props)
 
     @override
     def __setattr__(self, name: str, value: Any) -> None:
@@ -1022,7 +1002,7 @@ class Tmx(TmxElement):
     _allowed_content = ()
     _required_attributes = (TmxAttributes.version,)
     _optional_attributes = tuple()
-    version: str = "1.4"
+    version: str
     header: Header
     tus: MutableSequence[Tu]
 
@@ -1032,7 +1012,7 @@ class Tmx(TmxElement):
         header: Optional[Header] = None,
         tus: Optional[Iterable[Tu]] = None,
     ) -> None:
-        super().__init__(source_element=source_element)
+        super().__init__(source_element=source_element, version="1.4")
         self.tus = []
         if source_element is not None:
             if source_element.text:
@@ -1047,13 +1027,10 @@ class Tmx(TmxElement):
                                 self.tus.append(Tu(tu))
                     if item.tag == "header":
                         self.header = Header(item)
-        else:
-            if tus is not None:
-                self._content.extend(tus)
-                if header is not None:
-                    self.header = header
-                else:
-                    self.header = Header()
+        if not hasattr(self, "header"):
+            self.header = header if header is not None else Header()
+        if not len(self.tus) and tus is not None:
+            self.tus.extend(tus)
 
     def __iter__(self) -> Generator[Tu, None, None]:
         yield from self.tus
@@ -1077,7 +1054,7 @@ class Tmx(TmxElement):
             body.append(tu.to_element())
         return elem
 
-    def to_tmx(self, file: str | bytes | PathLike) -> None:
+    def to_tmx(self, file: str | bytes | PathLike, encoding: str = "utf-8") -> None:
         """
         Writes the element to a file using lxml.
 
@@ -1085,10 +1062,9 @@ class Tmx(TmxElement):
             file {str | bytes | PathLike | StringIO | BytesIO} -- A valid file
             path or file descriptor, or IO.
         """
-        ElementTree(self.to_element()).write(
-            file,
-            xml_declaration=True,
-        )
+        tree: _ElementTree = ElementTree(self.to_element())
+        with open(file, "w", encoding=encoding) as f:
+            tree.write(f, xml_declaration=True)
 
     def to_csv(self, file: str | bytes | PathLike) -> None:
         with open(file, "w", newline="") as f:
