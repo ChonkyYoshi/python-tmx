@@ -10,11 +10,14 @@ Aliases are bare until the converter pass wires their
 names.
 """
 
-import re
+import codecs
+import warnings
 from datetime import datetime
 from typing import Annotated
 
 from pydantic import AfterValidator, BeforeValidator, PlainSerializer
+
+from .errors import TmxWarning
 
 
 # Value aliases. Bare for now: the markers that parse XML strings and format
@@ -27,7 +30,28 @@ type TMXSourceLanguage = Annotated[str, ...]
 """A ``TMXLanguageTag`` or the special value ``*all*``; not case-sensitive."""
 
 
-_HEX_CODE_POINT = re.compile(r"#x[0-9A-Fa-f]+")
+def warn_unknown_encoding(value: str) -> str:
+  """Nudge when an encoding name is unknown to Python's codecs.
+
+  The spec recommends IANA charset identifiers for ``o-encoding`` and
+  ``<ude base>`` but only as a soft "if possible" -- not enforceable, so
+  this warns and keeps the value instead of rejecting it.
+  """
+  try:
+    codecs.lookup(value)
+  except LookupError:
+    warnings.warn(
+      f"encoding {value!r} is not recognized by Python's codecs;"
+      " the spec recommends IANA charset identifiers",
+      TmxWarning,
+    )
+  return value
+
+
+type TMXEncodingName = Annotated[str, AfterValidator(warn_unknown_encoding)]
+
+
+_HEX_DIGITS = "0123456789abcdefABCDEF"
 
 
 def parse_hex_integer(value: object) -> int:
@@ -41,9 +65,17 @@ def parse_hex_integer(value: object) -> int:
   """
   if isinstance(value, int):
     return value
-  if not isinstance(value, str) or not _HEX_CODE_POINT.fullmatch(value):
-    raise ValueError("expected '#x' followed by hexadecimal digits, e.g. '#xF8FF'")
-  return int(value[2:], 16)
+  if not isinstance(value, str):
+    raise TypeError(f"expected a string, got {type(value)!r}")
+  if not value.startswith("#x"):
+    raise ValueError("expected a '#x' prefix, e.g. '#xF8FF'")
+  digits = value[2:]
+  if not digits:
+    raise ValueError("missing digits after '#x'")
+  for digit in digits:
+    if digit not in _HEX_DIGITS:
+      raise ValueError(f"invalid hexadecimal digit {digit!r}")
+  return int(digits, 16)
 
 
 def format_hex_integer(value: int) -> str:

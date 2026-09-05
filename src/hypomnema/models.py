@@ -18,6 +18,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 from .types import (
   TMXAsciiText,
+  TMXEncodingName,
   TMXDatetime,
   TMXHexInteger,
   TMXIdentifier,
@@ -62,7 +63,7 @@ class Note(TmxModel):
   """
 
   element: Literal["note"] = Field(default="note", frozen=True)
-  o_encoding: str | None = None
+  o_encoding: TMXEncodingName | None = None
   xml_lang: TMXLanguageTag | None = None
   # Deprecated by TMX 1.3: use xml_lang.
   lang: TMXLanguageTag | None = None
@@ -78,7 +79,7 @@ class Property(TmxModel):
   element: Literal["prop"] = Field(default="prop", frozen=True)
   type: str
   xml_lang: TMXLanguageTag | None = None
-  o_encoding: str | None = None
+  o_encoding: TMXEncodingName | None = None
   # Deprecated by TMX 1.3: use xml_lang.
   lang: TMXLanguageTag | None = None
   text: str | None = None
@@ -110,7 +111,7 @@ class Ude(TmxModel):
 
   element: Literal["ude"] = Field(default="ude", frozen=True)
   name: str
-  base: str | None = None
+  base: TMXEncodingName | None = None
   maps: ModelSequence[Map] = ()
 
 
@@ -220,7 +221,7 @@ class Header(TmxModel):
   adminlang: TMXLanguageTag
   srclang: TMXSourceLanguage
   datatype: str
-  o_encoding: str | None = None
+  o_encoding: TMXEncodingName | None = None
   creationdate: TMXDatetime | None = None
   creationid: str | None = None
   changedate: TMXDatetime | None = None
@@ -238,7 +239,7 @@ class TranslationUnitVariant(TmxModel):
 
   element: Literal["tuv"] = Field(default="tuv", frozen=True)
   xml_lang: TMXLanguageTag
-  o_encoding: str | None = None
+  o_encoding: TMXEncodingName | None = None
   datatype: str | None = None
   usagecount: TMXInteger | None = None
   lastusagedate: TMXDatetime | None = None
@@ -265,7 +266,7 @@ class TranslationUnit(TmxModel):
 
   element: Literal["tu"] = Field(default="tu", frozen=True)
   tuid: TMXIdentifier | None = None
-  o_encoding: str | None = None
+  o_encoding: TMXEncodingName | None = None
   datatype: str | None = None
   usagecount: TMXInteger | None = None
   lastusagedate: TMXDatetime | None = None
