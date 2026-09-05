@@ -14,9 +14,10 @@ The deprecated attribute still exists in TMX 1.4b and is modeled.
 """
 
 from datetime import datetime
+import re
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, PlainSerializer
 
 
 def _as_tuple[T](value: list[T] | tuple[T, ...]) -> tuple[T, ...]:
@@ -39,6 +40,54 @@ type ModelSequence[T] = Annotated[tuple[T, ...], BeforeValidator(_as_tuple)]
 # aliases, not models.
 type TMXInteger = Annotated[int, ...]
 type TMXDatetime = Annotated[datetime, ...]
+
+
+_HEX_CODE_POINT = re.compile(r"#x[0-9A-Fa-f]+")
+
+
+def _parse_hex_integer(value: object) -> int:
+  """Parse a ``#x``-prefixed hexadecimal integer, e.g. ``#xF8FF``.
+
+  The format the TMX spec prescribes for ``<map unicode>`` and
+  ``<map code>``. Strictly ``#x`` plus hexadecimal digits: no ``0x``, no
+  sign, no whitespace, no ``int()`` conveniences such as underscores.
+  Already-integer values pass through so Python and JSON-python inputs
+  work.
+  """
+  if isinstance(value, int):
+    return value
+  if not isinstance(value, str) or not _HEX_CODE_POINT.fullmatch(value):
+    raise ValueError("expected '#x' followed by hexadecimal digits, e.g. '#xF8FF'")
+  return int(value[2:], 16)
+
+
+def _format_hex_integer(value: int) -> str:
+  """Format a hexadecimal integer the way the spec's examples spell it."""
+  return f"#x{value:X}"
+
+
+def _validate_unicode_scalar(value: int) -> int:
+  """Check a code point is a valid Unicode scalar value.
+
+  0 to 0x10FFFF, surrogates excluded; Private Use areas allowed per spec.
+  """
+  if not 0 <= value <= 0x10FFFF or 0xD800 <= value <= 0xDFFF:
+    raise ValueError("not a valid Unicode scalar value")
+  return value
+
+
+def _validate_ascii(value: str) -> str:
+  """Check text is ASCII, as the spec requires for ``ent`` and ``subst``."""
+  if not value.isascii():
+    raise ValueError("must be ASCII")
+  return value
+
+
+type TMXHexInteger = Annotated[
+  int, BeforeValidator(_parse_hex_integer), PlainSerializer(_format_hex_integer, return_type=str)
+]
+type TMXUnicodeCodePoint = Annotated[TMXHexInteger, AfterValidator(_validate_unicode_scalar)]
+type TMXAsciiText = Annotated[str, AfterValidator(_validate_ascii)]
 
 
 # Union slots, named for the content shape they carry. Lazy PEP 695 aliases,
@@ -87,13 +136,16 @@ class Map(TmxModel):
   """``<map>``: character mapping inside a ``<ude>``.
 
   DTD: ``<!ELEMENT map EMPTY>`` -- no content; ``unicode`` required.
+  The spec types the values beyond what the DTD can express: ``unicode``
+  and ``code`` are ``#x``-prefixed hexadecimal integers, ``ent`` and
+  ``subst`` must be ASCII text.
   """
 
   element: Literal["map"] = Field(default="map", frozen=True)
-  unicode: str
-  code: str | None = None
-  ent: str | None = None
-  subst: str | None = None
+  unicode: TMXUnicodeCodePoint
+  code: TMXHexInteger | None = None
+  ent: TMXAsciiText | None = None
+  subst: TMXAsciiText | None = None
 
 
 class Ude(TmxModel):
