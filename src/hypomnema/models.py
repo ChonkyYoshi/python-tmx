@@ -18,16 +18,15 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 
-def _as_tuple(value: object) -> object:
+def _as_tuple[T](value: list[T] | tuple[T, ...]) -> tuple[T, ...]:
   """Accept a list or a tuple for a repeated field; store a tuple.
 
   Tuples close the mutation hole that ``validate_assignment`` cannot see:
   ``model.items.append(x)`` is invisible, ``model.items += (x,)`` rebinds and
-  revalidates.
+  revalidates. Values of any other type pass through untouched so the strict
+  tuple check rejects them with a proper Pydantic error.
   """
-  if isinstance(value, list):
-    return tuple(value)
-  return value
+  return tuple(value) if isinstance(value, list) else value
 
 
 type ModelSequence[T] = Annotated[tuple[T, ...], BeforeValidator(_as_tuple)]
@@ -57,7 +56,7 @@ class Note(TmxModel):
   xml_lang: str | None = None
   # Deprecated by TMX 1.3: use xml_lang.
   lang: str | None = None
-  text: str = ""
+  text: str | None = None
 
 
 class Property(TmxModel):
@@ -72,7 +71,7 @@ class Property(TmxModel):
   o_encoding: str | None = None
   # Deprecated by TMX 1.3: use xml_lang.
   lang: str | None = None
-  text: str = ""
+  text: str | None = None
 
 
 class Map(TmxModel):
@@ -269,5 +268,3 @@ class TranslationUnit(TmxModel):
   items: ModelSequence[TuChild] = ()
 
 
-Sub.model_rebuild()
-Hi.model_rebuild()
