@@ -1,9 +1,9 @@
 """Well-formedness validation for BCP 47 language tags (RFC 5646).
 
-Grammar-only, per RFC 5646 section 2.1: a tag is well-formed when it matches
-the ABNF. Registry semantics -- membership, deprecation, suppress-script,
-variant and extlang prefix requirements -- are out of scope and belong to a
-registry-backed layer.
+Grammar-only, per RFC 5646 section 2.2.9: a tag is "well-formed" when it
+matches the ABNF in section 2.1. The stricter "valid" class -- registry
+membership, deprecation, suppress-script, singleton uniqueness (section
+2.2.6 rule 3) -- is out of scope and belongs to a registry-backed layer.
 
 Self-contained (stdlib only, no TMX or third-party dependency) so it can be
 lifted out as a standalone package.
@@ -13,19 +13,33 @@ the ABNF is case-insensitive, so comparisons run on lowercased input while
 the original spelling is preserved.
 """
 
-_IRREGULAR_TAGS = frozenset({
-  "en-gb-oed",
-  "i-ami", "i-bnn", "i-default", "i-enochian", "i-hak", "i-klingon", "i-lux",
-  "i-mingo", "i-navajo", "i-pwn", "i-tao", "i-tay", "i-tsu",
-  "sgn-be-fr", "sgn-be-nl", "sgn-de", "sgn-dk", "sgn-es", "sgn-fr", "sgn-gb",
-  "sgn-gr", "sgn-it", "sgn-jp", "sgn-kr", "sgn-nl", "sgn-pt", "sgn-se",
-  "sgn-th", "sgn-tw", "sgn-us", "sgn-za",
-  "zh-min", "zh-min-nan",
-})
-"""``irregular`` production: grandfathered tags that are exceptions."""
+_IRREGULAR_TAGS = frozenset(
+  {
+    "en-gb-oed",
+    "i-ami",
+    "i-bnn",
+    "i-default",
+    "i-enochian",
+    "i-hak",
+    "i-klingon",
+    "i-lux",
+    "i-mingo",
+    "i-navajo",
+    "i-pwn",
+    "i-tao",
+    "i-tay",
+    "i-tsu",
+    "sgn-be-fr",
+    "sgn-be-nl",
+    "sgn-ch-de",
+  }
+)
+"""The ABNF's ``irregular`` production, verbatim (lowercased)."""
 
-_REGULAR_TAGS = frozenset({"art-lojban", "cel-gaulish", "no-bok", "no-nyn", "zh-guoyu", "zh-hakka", "zh-min", "zh-xiang", "zh-yue"})
-"""``regular`` production: grandfathered tags that match ``langtag`` syntax."""
+_REGULAR_TAGS = frozenset(
+  {"art-lojban", "cel-gaulish", "no-bok", "no-nyn", "zh-guoyu", "zh-hakka", "zh-min", "zh-min-nan", "zh-xiang"}
+)
+"""The ABNF's ``regular`` production, verbatim (lowercased)."""
 
 _GRANDFATHERED_TAGS = _IRREGULAR_TAGS | _REGULAR_TAGS
 
@@ -59,8 +73,7 @@ def _validate_langtag(subtags: list[str], original: str) -> None:
     index += 1
   # region = 2ALPHA / 3DIGIT
   if index < len(subtags) and (
-    (len(subtags[index]) == 2 and _is_alpha(subtags[index]))
-    or (len(subtags[index]) == 3 and _is_digit(subtags[index]))
+    (len(subtags[index]) == 2 and _is_alpha(subtags[index])) or (len(subtags[index]) == 3 and _is_digit(subtags[index]))
   ):
     index += 1
   # *("-" variant)
@@ -72,10 +85,9 @@ def _validate_langtag(subtags: list[str], original: str) -> None:
     singleton = subtags[index].lower()
     if len(singleton) != 1 or not _is_alphanum(singleton):
       raise ValueError(f"malformed subtag {subtags[index]!r}: {original!r}")
-    # RFC 5646, prose after the ABNF: a singleton must not appear more than
-    # once within the tag.
-    if singleton in singletons:
-      raise ValueError(f"duplicate singleton {singleton!r}: {original!r}")
+    # RFC 5646 section 2.2.6 rule 3: a singleton must appear at most once.
+    # That is a "valid" rule, not a "well-formed" one (section 2.2.9), so the
+    # grammar path does not enforce it; a future registry-backed layer may.
     singletons.add(singleton)
     index += 1
     if index == len(subtags):
@@ -104,7 +116,7 @@ def _validate_language(subtags: list[str], original: str) -> int:
   if not (
     short_alpha_language
     or (len(language) == 4 and _is_alpha(language))  # reserved for future use
-    or _is_alphanum(language, 5, 8)  # registered language subtags
+    or (5 <= len(language) <= 8 and _is_alpha(language))  # registered language subtags
   ):
     raise ValueError(f"malformed language subtag {language!r}: {original!r}")
   index = 1
@@ -120,15 +132,15 @@ def _validate_language(subtags: list[str], original: str) -> int:
 
 def _is_variant(subtag: str) -> bool:
   """``variant = 5*8alphanum / (DIGIT 3alphanum)``."""
-  return _is_alphanum(subtag, 5, 8) or (
-    len(subtag) == 4 and _is_digit(subtag[0]) and _is_alphanum(subtag[1:], 3, 3)
-  )
+  return _is_alphanum(subtag, 5, 8) or (len(subtag) == 4 and _is_digit(subtag[0]) and _is_alphanum(subtag[1:], 3, 3))
 
 
 def is_valid_language_tag(tag: str) -> bool:
   """Whether ``tag`` is a well-formed BCP 47 language tag.
 
-  ``language-tag = langtag / privateuse / grandfathered``.
+  ``language-tag = langtag / privateuse / grandfathered``. Non-string input
+  returns ``False`` rather than raising, for pydantic-shaped callers;
+  ``validate_language_tag`` raises ``TypeError`` instead.
   """
   if not isinstance(tag, str):
     return False

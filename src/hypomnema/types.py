@@ -27,8 +27,7 @@ def warn_unknown_encoding(value: str) -> str:
     codecs.lookup(value)
   except LookupError:
     warnings.warn(
-      f"encoding {value!r} is not recognized by Python's codecs;"
-      " the spec recommends IANA charset identifiers",
+      f"encoding {value!r} is not recognized by Python's codecs; the spec recommends IANA charset identifiers",
       TmxWarning,
     )
   return value
@@ -62,9 +61,7 @@ def format_integer(value: int) -> str:
   return str(value)
 
 
-type TMXInteger = Annotated[
-  int, BeforeValidator(parse_integer), PlainSerializer(format_integer, return_type=str)
-]
+type TMXInteger = Annotated[int, BeforeValidator(parse_integer), PlainSerializer(format_integer, return_type=str)]
 
 
 def parse_datetime(value: object) -> datetime:
@@ -99,10 +96,7 @@ def format_datetime(value: datetime) -> str:
     value = value.replace(tzinfo=UTC)
   else:
     value = value.astimezone(UTC)
-  return (
-    f"{value.year:04d}{value.month:02d}{value.day:02d}"
-    f"T{value.hour:02d}{value.minute:02d}{value.second:02d}Z"
-  )
+  return f"{value.year:04d}{value.month:02d}{value.day:02d}T{value.hour:02d}{value.minute:02d}{value.second:02d}Z"
 
 
 type TMXDatetime = Annotated[
@@ -123,17 +117,53 @@ type TMXIdentifier = Annotated[str, AfterValidator(validate_identifier)]
 
 # Grandfathered tags from the IANA registry: the one BCP 47 grammar path a
 # structural walk cannot decide. Fixed data, lowercased here.
-_GRANDFATHERED_TAGS = frozenset({
-  "en-gb-oed",
-  "i-ami", "i-bnn", "i-default", "i-enochian", "i-hak", "i-klingon", "i-lux",
-  "i-mingo", "i-navajo", "i-pwn", "i-tao", "i-tay", "i-tsu",
-  "sgn-be-fr", "sgn-be-nl", "sgn-de", "sgn-dk", "sgn-es", "sgn-fr", "sgn-gb",
-  "sgn-gr", "sgn-it", "sgn-jp", "sgn-kr", "sgn-nl", "sgn-pt", "sgn-se",
-  "sgn-th", "sgn-tw", "sgn-us", "sgn-za",
-  "zh-min", "zh-min-nan",
-  "art-lojban", "cel-gaulish", "no-bok", "no-nyn", "zh-guoyu", "zh-hakka",
-  "zh-min", "zh-xiang", "zh-yue",
-})
+_GRANDFATHERED_TAGS = frozenset(
+  {
+    "en-gb-oed",
+    "i-ami",
+    "i-bnn",
+    "i-default",
+    "i-enochian",
+    "i-hak",
+    "i-klingon",
+    "i-lux",
+    "i-mingo",
+    "i-navajo",
+    "i-pwn",
+    "i-tao",
+    "i-tay",
+    "i-tsu",
+    "sgn-be-fr",
+    "sgn-be-nl",
+    "sgn-de",
+    "sgn-dk",
+    "sgn-es",
+    "sgn-fr",
+    "sgn-gb",
+    "sgn-gr",
+    "sgn-it",
+    "sgn-jp",
+    "sgn-kr",
+    "sgn-nl",
+    "sgn-pt",
+    "sgn-se",
+    "sgn-th",
+    "sgn-tw",
+    "sgn-us",
+    "sgn-za",
+    "zh-min",
+    "zh-min-nan",
+    "art-lojban",
+    "cel-gaulish",
+    "no-bok",
+    "no-nyn",
+    "zh-guoyu",
+    "zh-hakka",
+    "zh-min",
+    "zh-xiang",
+    "zh-yue",
+  }
+)
 
 
 def _is_ascii_alpha(text: str) -> bool:
@@ -161,9 +191,7 @@ def validate_language_tag(value: str) -> str:
     return value
   subtags = value.split("-")
   if subtags[0].lower() == "x":
-    if len(subtags) < 2 or not all(
-      _is_alnum_subtag(subtag, 1, 8) for subtag in subtags[1:]
-    ):
+    if len(subtags) < 2 or not all(_is_alnum_subtag(subtag, 1, 8) for subtag in subtags[1:]):
       raise ValueError(f"malformed private-use language tag: {value!r}")
     return value
   if not (
@@ -174,29 +202,18 @@ def validate_language_tag(value: str) -> str:
     raise ValueError(f"malformed language subtag {subtags[0]!r}: {value!r}")
   index = 1
   extlang_count = 0
-  while (
-    extlang_count < 3
-    and index < len(subtags)
-    and len(subtags[index]) == 3
-    and _is_ascii_alpha(subtags[index])
-  ):
+  while extlang_count < 3 and index < len(subtags) and len(subtags[index]) == 3 and _is_ascii_alpha(subtags[index]):
     extlang_count += 1
     index += 1
   if index < len(subtags) and len(subtags[index]) == 4 and _is_ascii_alpha(subtags[index]):
     index += 1  # script
-  if index < len(subtags) and (
-    len(subtags[index]) == 3 and subtags[index].isdigit() and subtags[index].isascii()
-  ):
+  if index < len(subtags) and (len(subtags[index]) == 3 and subtags[index].isdigit() and subtags[index].isascii()):
     index += 1  # numeric region
   elif index < len(subtags) and len(subtags[index]) == 2 and _is_ascii_alpha(subtags[index]):
     index += 1  # alpha region
   while index < len(subtags) and (
     _is_alnum_subtag(subtags[index], 5, 8)
-    or (
-      len(subtags[index]) == 4
-      and subtags[index][0].isdigit()
-      and _is_ascii_alnum(subtags[index][1:])
-    )
+    or (len(subtags[index]) == 4 and subtags[index][0].isdigit() and _is_ascii_alnum(subtags[index][1:]))
   ):
     index += 1  # variants
   singletons: set[str] = set()
