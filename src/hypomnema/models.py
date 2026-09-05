@@ -13,6 +13,7 @@ replaced by ``_``, otherwise verbatim -- ``o_tmf``, ``xml_lang``, and plain
 The deprecated attribute still exists in TMX 1.4b and is modeled.
 """
 
+from datetime import datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
@@ -30,6 +31,14 @@ def _as_tuple[T](value: list[T] | tuple[T, ...]) -> tuple[T, ...]:
 
 
 type ModelSequence[T] = Annotated[tuple[T, ...], BeforeValidator(_as_tuple)]
+
+
+# Value aliases. Bare for now: the BeforeValidator/PlainSerializer markers
+# that parse XML strings and format canonical output land with the converter
+# pass. Models reference these names from the start, so that pass changes
+# aliases, not models.
+type TMXInteger = Annotated[int, ...]
+type TMXDatetime = Annotated[datetime, ...]
 
 
 # Union slots, named for the content shape they carry. Lazy PEP 695 aliases,
@@ -122,8 +131,8 @@ class Bpt(TmxModel):
   """
 
   element: Literal["bpt"] = Field(default="bpt", frozen=True)
-  i: str
-  x: str | None = None
+  i: TMXInteger
+  x: TMXInteger | None = None
   type: str | None = None
   content: ModelSequence[SubContentItem] = ()
 
@@ -136,7 +145,7 @@ class Ept(TmxModel):
   """
 
   element: Literal["ept"] = Field(default="ept", frozen=True)
-  i: str
+  i: TMXInteger
   content: ModelSequence[SubContentItem] = ()
 
 
@@ -149,7 +158,7 @@ class It(TmxModel):
 
   element: Literal["it"] = Field(default="it", frozen=True)
   pos: str
-  x: str | None = None
+  x: TMXInteger | None = None
   type: str | None = None
   content: ModelSequence[SubContentItem] = ()
 
@@ -161,7 +170,7 @@ class Ph(TmxModel):
   """
 
   element: Literal["ph"] = Field(default="ph", frozen=True)
-  x: str | None = None
+  x: TMXInteger | None = None
   # Prose enum: "p", "f", or "b".
   assoc: str | None = None
   type: str | None = None
@@ -176,7 +185,7 @@ class Hi(TmxModel):
   """
 
   element: Literal["hi"] = Field(default="hi", frozen=True)
-  x: str | None = None
+  x: TMXInteger | None = None
   type: str | None = None
   content: "ModelSequence[SegContentItem]" = ()
 
@@ -188,7 +197,7 @@ class Ut(TmxModel):
   """
 
   element: Literal["ut"] = Field(default="ut", frozen=True)
-  x: str | None = None
+  x: TMXInteger | None = None
   content: ModelSequence[SubContentItem] = ()
 
 
@@ -208,9 +217,9 @@ class Header(TmxModel):
   srclang: str
   datatype: str
   o_encoding: str | None = None
-  creationdate: str | None = None
+  creationdate: TMXDatetime | None = None
   creationid: str | None = None
-  changedate: str | None = None
+  changedate: TMXDatetime | None = None
   changeid: str | None = None
   items: ModelSequence[HeaderChild] = ()
 
@@ -227,13 +236,13 @@ class TranslationUnitVariant(TmxModel):
   xml_lang: str
   o_encoding: str | None = None
   datatype: str | None = None
-  usagecount: str | None = None
-  lastusagedate: str | None = None
+  usagecount: TMXInteger | None = None
+  lastusagedate: TMXDatetime | None = None
   creationtool: str | None = None
   creationtoolversion: str | None = None
-  creationdate: str | None = None
+  creationdate: TMXDatetime | None = None
   creationid: str | None = None
-  changedate: str | None = None
+  changedate: TMXDatetime | None = None
   o_tmf: str | None = None
   changeid: str | None = None
   # Deprecated by TMX 1.3: use xml_lang.
@@ -254,13 +263,13 @@ class TranslationUnit(TmxModel):
   tuid: str | None = None
   o_encoding: str | None = None
   datatype: str | None = None
-  usagecount: str | None = None
-  lastusagedate: str | None = None
+  usagecount: TMXInteger | None = None
+  lastusagedate: TMXDatetime | None = None
   creationtool: str | None = None
   creationtoolversion: str | None = None
-  creationdate: str | None = None
+  creationdate: TMXDatetime | None = None
   creationid: str | None = None
-  changedate: str | None = None
+  changedate: TMXDatetime | None = None
   segtype: str | None = None
   changeid: str | None = None
   o_tmf: str | None = None
