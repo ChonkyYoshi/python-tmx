@@ -1,9 +1,8 @@
 """All Pydantic TMX models (recursive family, one module).
 
-Structural pass: every attribute value is a plain ``str``. Proper value types
-(integers, datetimes, language tags, enums) are layered in later via
-``types.py``; this module fixes the node shapes, the mechanical field naming,
-and the two inline content grammars.
+Node shapes, the mechanical field naming, and the two inline content
+grammars. Value typing and conversion live in ``types.py``; this module only
+references the aliases.
 
 Field naming is mechanical: the TMX attribute name with ``-`` and ``:``
 replaced by ``_``, otherwise verbatim -- ``o_tmf``, ``xml_lang``, and plain
@@ -13,11 +12,20 @@ replaced by ``_``, otherwise verbatim -- ``o_tmf``, ``xml_lang``, and plain
 The deprecated attribute still exists in TMX 1.4b and is modeled.
 """
 
-from datetime import datetime
-import re
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, PlainSerializer
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+
+from .types import (
+  TMXAsciiText,
+  TMXDatetime,
+  TMXHexInteger,
+  TMXIdentifier,
+  TMXInteger,
+  TMXLanguageTag,
+  TMXSourceLanguage,
+  TMXUnicodeCodePoint,
+)
 
 
 def _as_tuple[T](value: list[T] | tuple[T, ...]) -> tuple[T, ...]:
@@ -32,62 +40,6 @@ def _as_tuple[T](value: list[T] | tuple[T, ...]) -> tuple[T, ...]:
 
 
 type ModelSequence[T] = Annotated[tuple[T, ...], BeforeValidator(_as_tuple)]
-
-
-# Value aliases. Bare for now: the BeforeValidator/PlainSerializer markers
-# that parse XML strings and format canonical output land with the converter
-# pass. Models reference these names from the start, so that pass changes
-# aliases, not models.
-type TMXInteger = Annotated[int, ...]
-type TMXDatetime = Annotated[datetime, ...]
-
-
-_HEX_CODE_POINT = re.compile(r"#x[0-9A-Fa-f]+")
-
-
-def _parse_hex_integer(value: object) -> int:
-  """Parse a ``#x``-prefixed hexadecimal integer, e.g. ``#xF8FF``.
-
-  The format the TMX spec prescribes for ``<map unicode>`` and
-  ``<map code>``. Strictly ``#x`` plus hexadecimal digits: no ``0x``, no
-  sign, no whitespace, no ``int()`` conveniences such as underscores.
-  Already-integer values pass through so Python and JSON-python inputs
-  work.
-  """
-  if isinstance(value, int):
-    return value
-  if not isinstance(value, str) or not _HEX_CODE_POINT.fullmatch(value):
-    raise ValueError("expected '#x' followed by hexadecimal digits, e.g. '#xF8FF'")
-  return int(value[2:], 16)
-
-
-def _format_hex_integer(value: int) -> str:
-  """Format a hexadecimal integer the way the spec's examples spell it."""
-  return f"#x{value:X}"
-
-
-def _validate_unicode_scalar(value: int) -> int:
-  """Check a code point is a valid Unicode scalar value.
-
-  0 to 0x10FFFF, surrogates excluded; Private Use areas allowed per spec.
-  """
-  if not 0 <= value <= 0x10FFFF or 0xD800 <= value <= 0xDFFF:
-    raise ValueError("not a valid Unicode scalar value")
-  return value
-
-
-def _validate_ascii(value: str) -> str:
-  """Check text is ASCII, as the spec requires for ``ent`` and ``subst``."""
-  if not value.isascii():
-    raise ValueError("must be ASCII")
-  return value
-
-
-type TMXHexInteger = Annotated[
-  int, BeforeValidator(_parse_hex_integer), PlainSerializer(_format_hex_integer, return_type=str)
-]
-type TMXUnicodeCodePoint = Annotated[TMXHexInteger, AfterValidator(_validate_unicode_scalar)]
-type TMXAsciiText = Annotated[str, AfterValidator(_validate_ascii)]
 
 
 # Union slots, named for the content shape they carry. Lazy PEP 695 aliases,
@@ -111,9 +63,9 @@ class Note(TmxModel):
 
   element: Literal["note"] = Field(default="note", frozen=True)
   o_encoding: str | None = None
-  xml_lang: str | None = None
+  xml_lang: TMXLanguageTag | None = None
   # Deprecated by TMX 1.3: use xml_lang.
-  lang: str | None = None
+  lang: TMXLanguageTag | None = None
   text: str | None = None
 
 
@@ -125,10 +77,10 @@ class Property(TmxModel):
 
   element: Literal["prop"] = Field(default="prop", frozen=True)
   type: str
-  xml_lang: str | None = None
+  xml_lang: TMXLanguageTag | None = None
   o_encoding: str | None = None
   # Deprecated by TMX 1.3: use xml_lang.
-  lang: str | None = None
+  lang: TMXLanguageTag | None = None
   text: str | None = None
 
 
@@ -265,8 +217,8 @@ class Header(TmxModel):
   creationtoolversion: str
   segtype: str
   o_tmf: str
-  adminlang: str
-  srclang: str
+  adminlang: TMXLanguageTag
+  srclang: TMXSourceLanguage
   datatype: str
   o_encoding: str | None = None
   creationdate: TMXDatetime | None = None
@@ -285,7 +237,7 @@ class TranslationUnitVariant(TmxModel):
   """
 
   element: Literal["tuv"] = Field(default="tuv", frozen=True)
-  xml_lang: str
+  xml_lang: TMXLanguageTag
   o_encoding: str | None = None
   datatype: str | None = None
   usagecount: TMXInteger | None = None
@@ -312,7 +264,7 @@ class TranslationUnit(TmxModel):
   """
 
   element: Literal["tu"] = Field(default="tu", frozen=True)
-  tuid: str | None = None
+  tuid: TMXIdentifier | None = None
   o_encoding: str | None = None
   datatype: str | None = None
   usagecount: TMXInteger | None = None
@@ -325,7 +277,7 @@ class TranslationUnit(TmxModel):
   segtype: str | None = None
   changeid: str | None = None
   o_tmf: str | None = None
-  srclang: str | None = None
+  srclang: TMXSourceLanguage | None = None
   items: ModelSequence[TuChild] = ()
 
 
