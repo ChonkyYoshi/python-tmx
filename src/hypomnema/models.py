@@ -16,14 +16,17 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
-from .types import (
+from .validators import (
   TMXAsciiText,
-  TMXEncodingName,
+  TMXAssoc,
   TMXDatetime,
+  TMXEncodingName,
   TMXHexInteger,
   TMXIdentifier,
   TMXInteger,
   TMXLanguageTag,
+  TMXPos,
+  TMXSegType,
   TMXSourceLanguage,
   TMXUnicodeCodePoint,
 )
@@ -162,7 +165,7 @@ class It(TmxModel):
   """
 
   element: Literal["it"] = Field(default="it", frozen=True)
-  pos: str
+  pos: TMXPos
   x: TMXInteger | None = None
   type: str | None = None
   content: ModelSequence[SubContentItem] = ()
@@ -176,8 +179,7 @@ class Ph(TmxModel):
 
   element: Literal["ph"] = Field(default="ph", frozen=True)
   x: TMXInteger | None = None
-  # Prose enum: "p", "f", or "b".
-  assoc: str | None = None
+  assoc: TMXAssoc | None = None
   type: str | None = None
   content: ModelSequence[SubContentItem] = ()
 
@@ -216,7 +218,7 @@ class Header(TmxModel):
   element: Literal["header"] = Field(default="header", frozen=True)
   creationtool: str
   creationtoolversion: str
-  segtype: str
+  segtype: TMXSegType
   o_tmf: str
   adminlang: TMXLanguageTag
   srclang: TMXSourceLanguage
@@ -275,10 +277,8 @@ class TranslationUnit(TmxModel):
   creationdate: TMXDatetime | None = None
   creationid: str | None = None
   changedate: TMXDatetime | None = None
-  segtype: str | None = None
+  segtype: TMXSegType | None = None
   changeid: str | None = None
   o_tmf: str | None = None
   srclang: TMXSourceLanguage | None = None
   items: ModelSequence[TuChild] = ()
-
-
