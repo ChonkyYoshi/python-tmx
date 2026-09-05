@@ -44,15 +44,31 @@ VALID_TU = """
 CASES = [
   ("valid header", VALID_HEADER, True),
   ("valid tu", VALID_TU, True),
-  ("header missing required srclang", '<header creationtool="c" creationtoolversion="1" segtype="sentence" o-tmf="t" adminlang="en" datatype="plaintext"/>', False),
+  (
+    "header missing required srclang",
+    '<header creationtool="c" creationtoolversion="1" segtype="sentence" o-tmf="t" adminlang="en" datatype="plaintext"/>',
+    False,
+  ),
   ("tu missing required tuv", "<tu><prop>p</prop></tu>", False),
   ("tu with unknown child element", "<tu><bogus/></tu>", False),
   ("tu with undeclared attribute", '<tu tuid="1" vendorjunk="x"><tuv xml:lang="en"><seg>hi</seg></tuv></tu>', False),
-  ("tu with interleaved note/prop (DTD-legal)", '<tu><note>n1</note><prop type="x">p</prop><note>n2</note><tuv xml:lang="en"><seg>s</seg></tuv></tu>', True),
+  (
+    "tu with interleaved note/prop (DTD-legal)",
+    '<tu><note>n1</note><prop type="x">p</prop><note>n2</note><tuv xml:lang="en"><seg>s</seg></tuv></tu>',
+    True,
+  ),
   ("tu with note AFTER tuv (illegal order)", '<tu><tuv xml:lang="en"><seg>s</seg></tuv><note>n</note></tu>', False),
   ("tuv missing xml:lang", "<tu><tuv><seg>s</seg></tuv></tu>", False),
-  ("seg with illegal nesting (bpt inside ph)", '<tu><tuv xml:lang="en"><seg><ph x="1">a<bpt i="1">t</bpt></ph></seg></tuv></tu>', False),
-  ("header with bad segtype enum value", '<header creationtool="c" creationtoolversion="1" segtype="banana" o-tmf="t" adminlang="en" srclang="en" datatype="plaintext"/>', False),
+  (
+    "seg with illegal nesting (bpt inside ph)",
+    '<tu><tuv xml:lang="en"><seg><ph x="1">a<bpt i="1">t</bpt></ph></seg></tuv></tu>',
+    False,
+  ),
+  (
+    "header with bad segtype enum value",
+    '<header creationtool="c" creationtoolversion="1" segtype="banana" o-tmf="t" adminlang="en" srclang="en" datatype="plaintext"/>',
+    False,
+  ),
 ]
 
 

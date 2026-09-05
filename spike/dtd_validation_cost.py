@@ -40,12 +40,12 @@ def large() -> str:
   segs = []
   for index in range(20):
     segs.append(
-      f'<tuv xml:lang="l{index % 40 :02d}"><seg>Sentence number {index} with '
+      f'<tuv xml:lang="l{index % 40:02d}"><seg>Sentence number {index} with '
       f'<bpt i="{index}">&lt;</bpt>inline content<ept i="{index}">&gt;</ept> and '
-      f'<hi>emphasis</hi> plus a decent amount of surrounding plain text to make the '
-      f'unit realistically large, around this size, repeating filler words.</seg></tuv>'
+      f"<hi>emphasis</hi> plus a decent amount of surrounding plain text to make the "
+      f"unit realistically large, around this size, repeating filler words.</seg></tuv>"
     )
-  return "<tu tuid=\"large\">" + "".join(segs) + "</tu>"
+  return '<tu tuid="large">' + "".join(segs) + "</tu>"
 
 
 def timed(fn, elements: list[etree._Element], rounds: int = 5) -> float:
@@ -68,7 +68,7 @@ def measure(name: str, xml: str, count: int = 2000) -> None:
   pipeline_time = timed(lambda element: DTD.validate(etree.fromstring(etree.tostring(element))), elements)
 
   def format_results(label: str, seconds: float) -> str:
-    return f"  {label:<38} {seconds * 1e6 :8.1f} us/elem  ({1 / seconds :>12,.0f} /s)"
+    return f"  {label:<38} {seconds * 1e6:8.1f} us/elem  ({1 / seconds:>12,.0f} /s)"
 
   print(f"{name}  ({size:,} bytes per fragment)")
   print(format_results("DTD.validate()", validate_time))
@@ -76,7 +76,7 @@ def measure(name: str, xml: str, count: int = 2000) -> None:
   print(format_results("tostring()", serialize_time))
   print(format_results("reader pipeline (parse+validate)", pipeline_time))
   overhead = validate_time / (parse_time + validate_time)
-  print(f"  validation share of reader pipeline: {overhead :.1%}\n")
+  print(f"  validation share of reader pipeline: {overhead:.1%}\n")
 
 
 def main() -> None:

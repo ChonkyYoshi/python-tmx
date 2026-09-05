@@ -10,7 +10,6 @@ The writer design depends on:
    fails and stays failed).
 """
 
-
 from lxml import etree
 
 DTD = etree.DTD(open("src/hypomnema/resources/tmx14.dtd", "rb"))
@@ -40,9 +39,7 @@ class Probe:
 
 
 def valid_tu(text: str, lang: str = "en") -> etree._Element:
-  tu = etree.fromstring(
-    f'<tu><tuv xml:lang="{lang}"><seg>{text}</seg></tuv></tu>'
-  )
+  tu = etree.fromstring(f'<tu><tuv xml:lang="{lang}"><seg>{text}</seg></tuv></tu>')
   assert DTD.validate(tu), DTD.error_log
   return tu
 
