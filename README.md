@@ -114,14 +114,14 @@ Segment content isn't a string — it's a mixed list of `str`, the allowed type 
 
 ```python
 for item in variant.segment:
-    match item:
-        case str():
-            ...
-        case Bpt(spec_attributes=a):
-            print(a.internal_id)
-        case UnknownInlineNode(payload=bytes):
-            # preserved for round-trip, never touched
-            ...
+  match item:
+    case str():
+      ...
+    case Bpt(spec_attributes=a):
+      print(a.internal_id)
+    case UnknownInlineNode(payload=bytes):
+      # preserved for round-trip, never touched
+      ...
 ```
 
 ## Type safety
