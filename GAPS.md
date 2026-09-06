@@ -44,9 +44,16 @@ direct model construction and eventual `TmxSpecError` wrapping at the XML bounda
 functions have a separate, explicit contract: the predicate returns false for
 non-strings; the raising validator raises `TypeError`.
 
-**Decision:** Ideally, I want the error being raised to the user to be a
-ValidationError *raised from* a type error, providing both a actionable
-trace for debugging AND also being easily catchable by user code.
+**Decision:** bad user input reaching models produces a catchable Pydantic
+`ValidationError`, with underlying causes retained where applicable. Use Pydantic's
+native error aggregation and enable `validation_error_cause=True`; the cause may
+be an exception group rather than a single `TypeError`.
+
+Validators must report rejected input through Pydantic's supported validation-error
+mechanism. Deliberately translated underlying exceptions retain their chains, but
+we neither manufacture a `TypeError` for every rejection nor broadly catch
+programming errors. Enabling error causes does not itself make Pydantic catch
+validator `TypeError`s. The standalone BCP 47 exception contract stays unchanged.
 
 ### 3. Datetime input breadth and serialization modes
 
@@ -62,13 +69,24 @@ or a broader explicitly enumerated set? Should `model_dump()` expose native valu
 and only JSON/XML use strings? Normalization and accepted syntax should be tested
 against explicit examples, not just self-round-trips.
 
-**Decision:** `model_dump` in python should expose native values such as actual int,
-or datetime. Any actual serialization like json/xml will get strings. On the ISO 8601
-question, the code should be updated to ensure *any* ISO 8601 compliant *instant*
-specifcially will pass validation, anything should fail, so a date or time object,
-a string like Monday or January, and any other object, should fail. If no timezone
-info is provided, we assume UTC (and document as such). If one is provided, we keep
-the existing one since it's valid (most likely requires ammending the formatting functions).
+**Decision:** Python-mode `model_dump()` exposes native values for the integer,
+hexadecimal, and datetime aliases. JSON/XML serialize these values as strings.
+
+Accept native `datetime` values and date-time strings representable and parseable
+by `datetime.fromisoformat()`, not the full ISO 8601 repertoire. Input must include
+both date and time: date-only strings are rejected even though `fromisoformat()`
+accepts them. Date objects, time objects, unrelated strings, and other input types
+are rejected. Do not build a broader ISO parser or claim full ISO conformance.
+
+Assume UTC when timezone information is absent. Preserve an explicitly supplied
+timezone/offset in the model and its offset in JSON/XML output; do not convert to
+canonical UTC. This supersedes the plan's canonical-UTC formatting policy. It does
+not promise lexical preservation of input strings or preservation of a named
+Python timezone's identity in serialized timestamps.
+
+**Still open:** the plan currently truncates fractional seconds. Confirm whether
+to retain that policy or preserve the precision supported by `datetime`; preserving
+it is recommended to align with the decision not to discard supplied offset data.
 
 ## Models
 
@@ -119,14 +137,20 @@ error does writing a structurally invalid model raise, and does it permanently
 fail the writer? If not, where are these structural constraints enforced without
 creating a second schema implementation?
 
-**Decision:** On being able to create an object like `TranslationUnit()` that
-represents a incorrect state according to the DTD, we should error on creation.
-On specifically the `TranslationUnit.items`, I would go the way of intentionally
-separating the "main" content (so tuv for a tu, the seg content for a tuv), from
-the metadata elements. Each are a tuple, to presever order, however on write,
-we always ensure that we write the metadata elements first, in order, and then
-the content elements, satisfying the DTD, and ensuring proper round-tripping
-(technically order doesn't matter but if we can keep it, might as well).
+**Decision:** reject structurally invalid construction, including a translation
+unit without variants or a user-defined encoding without maps. Models own the
+corresponding structural constraints as well as value validation; this intentionally
+revises the plan's exclusive assignment of cardinality to the DTD. Independent DTD
+validation and agreement tests remain safeguards against drift.
+
+Separate a translation unit's metadata (`Note | Property`, interleaved in one tuple)
+from its variants (a separate nonempty tuple). Keep each group's order and write
+metadata before variants, as the DTD requires. Do not split notes from properties.
+Variants likewise keep metadata separate from segment content, as they already do.
+An empty segment remains legal. Final field names are not decided here.
+
+This promises structural correctness, not meaningful translations or completeness
+beyond what the TMX contract requires.
 
 ### 6. Cross-field and segment-wide spec requirements
 
@@ -141,8 +165,11 @@ before claiming complete strictness. Decide validation scope for inline pairing,
 including nested `hi`/`sub` content; the spec explicitly allows overlapping native
 code pairs, so ordinary XML-style stack nesting would be the wrong rule.
 
-**Decision:** Agreed with the proposed direction, we'll need to do a full audit of
-the spec to catch any prose rule and add validators/warnings wherever needed.
+**Decision:** audit the complete spec prose before claiming full strictness.
+Mandatory requirements become validation rules. Recommendations may warrant
+warnings where actionable, but not every departure warrants one. Examples and
+conventions must not accidentally become requirements. The detailed audit and
+placement of individual rules will be discussed when this work begins.
 
 ### 7. Assignment safety for constraints involving several nodes
 
@@ -155,11 +182,22 @@ cannot guarantee that an already-built tree still satisfies parent-level rules.
 validation before serialization? Or should the model API prevent changes that
 invalidate parents? Avoid promising that tuples solve cross-node mutation safety.
 
-**Decision:** Trying to ensure parents are valid when assigning an attribute to the
-child would enforce too much complexity, we document and accept that we can only
-ensure that a given model is valid at assignment time, but that wider tree validaty
-is only ensure either via a deliberate, user initiated `model_validate` or during
-serialization in the writer.
+**Decision:** successful assignment satisfies the model's local constraints.
+There is no promise that a failed assignment rolls back all changes, and no parent
+tracking or cascading revalidation when a child changes.
+
+Broader rules, such as the `Ude`/`Map` relationship, must be checked by explicit
+validators/functions available to callers and by the writer. Their exact API is
+still to be designed. Do not assume `model_validate(existing_model)` deeply
+revalidates existing instances: Pydantic trusts instances by default, so any such
+entry point must deliberately ensure the required validation actually runs.
+
+The writer is the final conformance boundary: it must check applicable domain/prose
+rules as well as DTD structure before accepting data for output. Successfully
+completed output must be spec-compliant TMX, not necessarily meaningful or complete
+translation data. This does not make streaming output transactional or guarantee
+intact bytes after an I/O failure; partial-output failure semantics remain part of
+the later writer design.
 
 ### 8. Deprecated language attributes
 
@@ -172,11 +210,19 @@ spec gives a reason not to. Explicitly settle whether simultaneously supplied
 `lang` and `xml_lang` may differ; do not introduce equality or fallback behavior
 without a spec/policy basis.
 
-**Decision:** We should error on creation if only lang is provided. If only
-xml:lang is provided, lang stays as None and just never gets serialized. If
-they differ (either at assignment or on serialization) we warn, as this
-*technically* is valid, but user should be made aware tools may reject or
-only consider xml:lang
+**Decision:** validate both language attributes consistently as language tags.
+For `TranslationUnitVariant`, `xml_lang` is required; providing only legacy `lang`
+is an error. For `Note` and `Property`, both attributes remain optional. A legacy
+`lang` without `xml_lang` is accepted with a warning: it is technically correct,
+but `lang` is deprecated; use `xml:lang` if possible.
+
+When both attributes are present and differ, warn rather than reject. Compare tags
+case-insensitively, so `en-US` and `EN-us` do not conflict. Apply the advisory checks
+at validation/assignment and writer validation, including when child mutation may
+have changed the state. Do not normalize one attribute from the other.
+
+When only `xml_lang` is supplied, leave `lang` as `None` and omit that attribute
+from XML output.
 
 ## XML boundary (defer until projection / I/O exists)
 
