@@ -80,15 +80,11 @@ def _validate_langtag(subtags: list[str], original: str) -> None:
   while index < len(subtags) and _is_variant(subtags[index]):
     index += 1
   # *("-" extension) ["-" privateuse]
-  singletons: set[str] = set()
+  # Duplicate singletons affect validity, not ABNF well-formedness (2.2.9).
   while index < len(subtags):
     singleton = subtags[index].lower()
     if len(singleton) != 1 or not _is_alphanum(singleton):
       raise ValueError(f"malformed subtag {subtags[index]!r}: {original!r}")
-    # RFC 5646 section 2.2.6 rule 3: a singleton must appear at most once.
-    # That is a "valid" rule, not a "well-formed" one (section 2.2.9), so the
-    # grammar path does not enforce it; a future registry-backed layer may.
-    singletons.add(singleton)
     index += 1
     if index == len(subtags):
       raise ValueError(f"singleton {singleton!r} without subtags: {original!r}")
@@ -135,14 +131,15 @@ def _is_variant(subtag: str) -> bool:
   return _is_alphanum(subtag, 5, 8) or (len(subtag) == 4 and _is_digit(subtag[0]) and _is_alphanum(subtag[1:], 3, 3))
 
 
-def is_valid_language_tag(tag: str) -> bool:
+def is_valid_language_tag(tag: object) -> bool:
   """Whether ``tag`` is a well-formed BCP 47 language tag.
 
   ``language-tag = langtag / privateuse / grandfathered``. Non-string input
   returns ``False`` rather than raising, for pydantic-shaped callers;
   ``validate_language_tag`` raises ``TypeError`` instead.
   """
-  if not isinstance(tag, str):
+  # Check before lower(): non-ASCII U+212A (Kelvin sign) folds to ASCII 'k'.
+  if not isinstance(tag, str) or not tag.isascii():
     return False
   lowered = tag.lower()
   if lowered in _GRANDFATHERED_TAGS:
@@ -158,7 +155,7 @@ def is_valid_language_tag(tag: str) -> bool:
   return True
 
 
-def validate_language_tag(tag: str) -> str:
+def validate_language_tag(tag: object) -> str:
   """Validate a well-formed BCP 47 language tag and return it unchanged.
 
   Raises ``ValueError`` with a reason when the tag is not well-formed.
