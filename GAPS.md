@@ -28,7 +28,9 @@ or deliberately rely on their Pydantic aliases. The decimal digit-only policy is
 in the plan; the spec describes `i`, `x`, and `usagecount` as numbers, while the
 bundled XML DTD uses CDATA, so do not claim the DTD enforces this value policy.
 
-**Decision:**
+**Decision:** We take the stance that attributes the spec defines as "Numbers"
+MUST be valid unsigned integers. So negative ints (even native ones) error,
+bool error, leading zeros are fine, floats error as well.
 
 ### 2. Validation exception boundary
 
@@ -42,7 +44,9 @@ direct model construction and eventual `TmxSpecError` wrapping at the XML bounda
 functions have a separate, explicit contract: the predicate returns false for
 non-strings; the raising validator raises `TypeError`.
 
-**Decision:**
+**Decision:** Ideally, I want the error being raised to the user to be a
+ValidationError *raised from* a type error, providing both a actionable
+trace for debugging AND also being easily catchable by user code.
 
 ### 3. Datetime input breadth and serialization modes
 
@@ -58,7 +62,13 @@ or a broader explicitly enumerated set? Should `model_dump()` expose native valu
 and only JSON/XML use strings? Normalization and accepted syntax should be tested
 against explicit examples, not just self-round-trips.
 
-**Decision:**
+**Decision:** `model_dump` in python should expose native values such as actual int,
+or datetime. Any actual serialization like json/xml will get strings. On the ISO 8601
+question, the code should be updated to ensure *any* ISO 8601 compliant *instant*
+specifcially will pass validation, anything should fail, so a date or time object,
+a string like Monday or January, and any other object, should fail. If no timezone
+info is provided, we assume UTC (and document as such). If one is provided, we keep
+the existing one since it's valid (most likely requires ammending the formatting functions).
 
 ## Models
 
@@ -109,7 +119,14 @@ error does writing a structurally invalid model raise, and does it permanently
 fail the writer? If not, where are these structural constraints enforced without
 creating a second schema implementation?
 
-**Decision:**
+**Decision:** On being able to create an object like `TranslationUnit()` that
+represents a incorrect state according to the DTD, we should error on creation.
+On specifically the `TranslationUnit.items`, I would go the way of intentionally
+separating the "main" content (so tuv for a tu, the seg content for a tuv), from
+the metadata elements. Each are a tuple, to presever order, however on write,
+we always ensure that we write the metadata elements first, in order, and then
+the content elements, satisfying the DTD, and ensuring proper round-tripping
+(technically order doesn't matter but if we can keep it, might as well).
 
 ### 6. Cross-field and segment-wide spec requirements
 
@@ -124,7 +141,8 @@ before claiming complete strictness. Decide validation scope for inline pairing,
 including nested `hi`/`sub` content; the spec explicitly allows overlapping native
 code pairs, so ordinary XML-style stack nesting would be the wrong rule.
 
-**Decision:**
+**Decision:** Agreed with the proposed direction, we'll need to do a full audit of
+the spec to catch any prose rule and add validators/warnings wherever needed.
 
 ### 7. Assignment safety for constraints involving several nodes
 
@@ -137,7 +155,11 @@ cannot guarantee that an already-built tree still satisfies parent-level rules.
 validation before serialization? Or should the model API prevent changes that
 invalidate parents? Avoid promising that tuples solve cross-node mutation safety.
 
-**Decision:**
+**Decision:** Trying to ensure parents are valid when assigning an attribute to the
+child would enforce too much complexity, we document and accept that we can only
+ensure that a given model is valid at assignment time, but that wider tree validaty
+is only ensure either via a deliberate, user initiated `model_validate` or during
+serialization in the writer.
 
 ### 8. Deprecated language attributes
 
@@ -150,7 +172,11 @@ spec gives a reason not to. Explicitly settle whether simultaneously supplied
 `lang` and `xml_lang` may differ; do not introduce equality or fallback behavior
 without a spec/policy basis.
 
-**Decision:**
+**Decision:** We should error on creation if only lang is provided. If only
+xml:lang is provided, lang stays as None and just never gets serialized. If
+they differ (either at assignment or on serialization) we warn, as this
+*technically* is valid, but user should be made aware tools may reject or
+only consider xml:lang
 
 ## XML boundary (defer until projection / I/O exists)
 
