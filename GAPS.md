@@ -75,7 +75,24 @@ input be rejected rather than inferred? Keep convenient constructors such as
 `Hi()` distinct from the rules for selecting a node type from a union. Mixed
 string/node content needs a discrimination approach that still accepts strings.
 
-**Decision:**
+**Decision:** use explicit `element` discrimination for heterogeneous model unions
+(option 2). Node identity comes from the chosen class or an explicit tag, never
+from guessing based on field shape.
+
+- Keep `element` defaulted and frozen: constructors such as `Hi()` and direct
+  validation through `Hi.model_validate(...)` already identify the class and do
+  not require the caller to repeat its tag. Already-typed model instances remain
+  accepted in content sequences.
+- Dictionaries/JSON in slots choosing between multiple model types must carry
+  `element`. Reject missing or unknown tags; do not fall back to inference.
+- Mixed content remains ordinary strings plus a tagged model-only union. Attach
+  the discriminator to the model union, not to the surrounding string/node union.
+- No additional tag requirement where the model type is already unambiguous,
+  such as the `Sub` branch of `str | Sub`.
+
+The extra verbosity for hand-authored dictionaries is acceptable; explicit model
+constructors are the preferred Python construction interface. Implementation and
+contract tests are still pending.
 
 ### 5. Structurally incomplete models versus writer failures
 
