@@ -1,8 +1,12 @@
-# Contracts to settle before the next testing slices
+# Validation contract review
 
 Working review sheet, not a replacement for `PLAN.md` or a list of behavior to
 preserve just because the implementation currently does it. Edit the **Decision**
-lines directly. These items do not block the independent BCP 47 grammar tests.
+lines directly. Decisions 1–8 are incorporated into the updated plan but still
+await implementation/testing; the API and scope of the prose audit remain future
+work. Questions 9–10 are deferred to XML/I/O. The independent BCP 47 grammar suite
+is implemented and under review. Observations retain the context of the initial
+review; a recorded decision is not a claim that the code already implements it.
 
 Sources of truth:
 
@@ -75,12 +79,14 @@ hexadecimal, and datetime aliases. JSON/XML serialize these values as strings.
 Accept native `datetime` values and date-time strings representable and parseable
 by `datetime.fromisoformat()`, not the full ISO 8601 repertoire. Input must include
 both date and time: date-only strings are rejected even though `fromisoformat()`
-accepts them. Date objects, time objects, unrelated strings, and other input types
-are rejected. Do not build a broader ISO parser or claim full ISO conformance.
+accepts them. Date-time syntax follows that parser rather than the current code's
+narrower `T`/`t` separator requirement. Date objects, time objects, unrelated strings,
+and other input types are rejected. Do not build a broader ISO parser or claim
+full ISO conformance.
 
 Assume UTC when timezone information is absent. Preserve an explicitly supplied
 timezone/offset in the model and its offset in JSON/XML output; do not convert to
-canonical UTC. This supersedes the plan's canonical-UTC formatting policy. It does
+canonical UTC. This supersedes the original plan's canonical-UTC policy. It does
 not promise lexical preservation of input strings or preservation of a named
 Python timezone's identity in serialized timestamps.
 
@@ -127,9 +133,10 @@ contract tests are still pending.
 
 **Observed:** `TranslationUnit()` and `Ude(name="example")` are accepted despite
 DTD `tuv+` and `map+` requirements. `TranslationUnit.items` also permits notes after
-variants, which the DTD rejects. This follows the plan's “DTD owns order and
-cardinality” direction, but conflicts with its claim that a writer DTD failure
-necessarily means an internal model/projection bug rather than bad caller data.
+variants, which the DTD rejects. This followed the original plan's “DTD owns order
+and cardinality” direction, but conflicted with its claim that a writer DTD failure
+necessarily meant an internal model/projection bug rather than bad caller data.
+The revised plan incorporates the decision below; the code still needs updating.
 An empty variant content tuple is different: it can represent a legal empty
 `<seg/>`, because the XML builder will supply the wrapper.
 
@@ -244,9 +251,10 @@ normalizations. Do not equate a textual code-point attribute with literal XML te
 
 ### 10. Input DOCTYPE and entity wording needs an executable contract
 
-**Observed:** the plan says internal subsets are never loaded. Disabling external
-DTD loading does not mean libxml2 ignores all internal-subset declarations. Parser
-flags are implementation choices, not themselves proof of the security guarantee.
+**Observed:** the original plan claimed internal subsets were never loaded.
+Disabling external DTD loading does not mean libxml2 ignores all internal-subset
+declarations. The revised plan marks this as unresolved: parser flags are
+implementation choices, not themselves proof of the security guarantee.
 
 **Proposed direction:** settle the desired externally observable policy (for example,
 DOCTYPE accepted but never authoritative, versus rejecting internal declarations).
@@ -258,10 +266,10 @@ limits merely to make a fixture pass.
 
 ## Housekeeping / verification later
 
-- The plan and the `models.py` module docstring still refer to `types.py`, now
-  `validators.py`; the code also has a separate `bcp47.py` module.
-- `PLAN.md` says 100-character lines; `ruff.toml` configures 120. Follow the existing
-  formatter until a preference is chosen.
+- The `models.py` module docstring still refers to `types.py`, now `validators.py`.
+  The plan has been updated for that rename and the separate `bcp47.py` module.
+- The plan now reflects the existing `ruff.toml` settings: two-space indentation
+  and 120-character lines. No formatter configuration was changed.
 - XML modules and `io.py` are placeholders; the error hierarchy only has
   `TmxWarning`. These are unfinished work, not failing-test targets yet.
 - Verify the DTD is included in a built wheel and loadable through package resources
