@@ -84,9 +84,10 @@ canonical UTC. This supersedes the plan's canonical-UTC formatting policy. It do
 not promise lexical preservation of input strings or preservation of a named
 Python timezone's identity in serialized timestamps.
 
-**Still open:** the plan currently truncates fractional seconds. Confirm whether
-to retain that policy or preserve the precision supported by `datetime`; preserving
-it is recommended to align with the decision not to discard supplied offset data.
+Preserve fractional seconds to the precision supported by `datetime` (microseconds)
+in both the model and JSON/XML output. Do not truncate to whole seconds. This
+supersedes the original plan's truncation policy; parsing remains bounded by
+`datetime.fromisoformat()` rather than promising arbitrary-precision timestamps.
 
 ## Models
 
