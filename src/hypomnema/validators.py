@@ -16,7 +16,7 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BeforeValidator, PlainSerializer
 
-from .bcp47 import validate_language_tag
+from .bcp47 import validate_language_tag_is_well_formed
 from .errors import TmxWarning
 
 
@@ -141,10 +141,10 @@ def validate_source_language(value: str) -> str:
   """
   if value.lower() == "*all*":
     return "*all*"
-  return validate_language_tag(value)
+  return validate_language_tag_is_well_formed(value)
 
 
-type TMXLanguageTag = Annotated[str, AfterValidator(validate_language_tag)]
+type TMXLanguageTag = Annotated[str, AfterValidator(validate_language_tag_is_well_formed)]
 type TMXSourceLanguage = Annotated[str, AfterValidator(validate_source_language)]
 
 

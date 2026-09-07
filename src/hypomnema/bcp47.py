@@ -131,7 +131,7 @@ def _is_variant(subtag: str) -> bool:
   return _is_alphanum(subtag, 5, 8) or (len(subtag) == 4 and _is_digit(subtag[0]) and _is_alphanum(subtag[1:], 3, 3))
 
 
-def is_valid_language_tag(tag: object) -> bool:
+def is_well_formed_language_tag(tag: object) -> bool:
   """Whether ``tag`` is a well-formed BCP 47 language tag.
 
   ``language-tag = langtag / privateuse / grandfathered``. Non-string input
@@ -155,7 +155,7 @@ def is_valid_language_tag(tag: object) -> bool:
   return True
 
 
-def validate_language_tag(tag: object) -> str:
+def validate_language_tag_is_well_formed(tag: object) -> str:
   """Validate a well-formed BCP 47 language tag and return it unchanged.
 
   Raises ``ValueError`` with a reason when the tag is not well-formed.
@@ -163,6 +163,6 @@ def validate_language_tag(tag: object) -> str:
   """
   if not isinstance(tag, str):
     raise TypeError(f"expected a string, got {type(tag)!r}")
-  if not is_valid_language_tag(tag):
+  if not is_well_formed_language_tag(tag):
     raise ValueError(f"not a well-formed BCP 47 language tag: {tag!r}")
   return tag

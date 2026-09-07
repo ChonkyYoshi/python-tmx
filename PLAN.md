@@ -162,12 +162,7 @@ The target shared base configuration is:
 
 ```python
 class TmxModel(BaseModel):
-  model_config = ConfigDict(
-    extra="forbid",
-    strict=True,
-    validate_assignment=True,
-    validation_error_cause=True,
-  )
+  model_config = ConfigDict(extra="forbid", strict=True, validate_assignment=True, validation_error_cause=True)
 ```
 
 Deliberate `BeforeValidator` functions perform the few conversions we mean to
@@ -227,10 +222,7 @@ unions have overlapping shapes and need this change.
 Mixed content remains ordinary strings plus a tagged model-only union:
 
 ```python
-type InlineNode = Annotated[
-  Bpt | Ept | Ph | It | Hi | Ut,
-  Field(discriminator="element"),
-]
+type InlineNode = Annotated[Bpt | Ept | Ph | It | Hi | Ut, Field(discriminator="element")]
 type SegContentItem = str | InlineNode
 ```
 

@@ -9,7 +9,7 @@ import string
 
 import pytest
 
-from hypomnema.bcp47 import is_valid_language_tag, validate_language_tag
+from hypomnema.bcp47 import is_well_formed_language_tag, validate_language_tag_is_well_formed
 
 # Appendix A: all examples before "Some Invalid Tags".
 RFC_EXAMPLES = (
@@ -83,8 +83,8 @@ REGULAR_TAGS = (
 
 @pytest.mark.parametrize("tag", RFC_EXAMPLES)
 def test_rfc_examples_are_accepted(tag: str) -> None:
-  assert is_valid_language_tag(tag)
-  assert validate_language_tag(tag) == tag
+  assert is_well_formed_language_tag(tag)
+  assert validate_language_tag_is_well_formed(tag) == tag
 
 
 @pytest.mark.parametrize("tag", IRREGULAR_TAGS + REGULAR_TAGS)
@@ -97,20 +97,20 @@ def test_grandfathered_tags_are_case_insensitive(tag: str, case: str) -> None:
       spelling = tag.upper()
     case _:
       spelling = tag.swapcase()
-  assert is_valid_language_tag(spelling)
-  assert validate_language_tag(spelling) == spelling
+  assert is_well_formed_language_tag(spelling)
+  assert validate_language_tag_is_well_formed(spelling) == spelling
 
 
 @pytest.mark.parametrize("tag", IRREGULAR_TAGS)
 def test_irregular_tags_cannot_be_extended(tag: str) -> None:
   # An irregular literal is a complete alternative, not a langtag prefix.
-  assert not is_valid_language_tag(f"{tag}-x-private")
+  assert not is_well_formed_language_tag(f"{tag}-x-private")
 
 
 @pytest.mark.parametrize("tag", REGULAR_TAGS)
 def test_regular_tag_spellings_can_also_follow_the_langtag_grammar(tag: str) -> None:
   # These spellings happen to fit langtag independently of the literal table.
-  assert is_valid_language_tag(f"{tag}-x-private")
+  assert is_well_formed_language_tag(f"{tag}-x-private")
 
 
 @pytest.mark.parametrize(
@@ -184,19 +184,19 @@ def test_regular_tag_spellings_can_also_follow_the_langtag_grammar(tag: str) -> 
   ],
 )
 def test_grammar_productions_accept_their_boundaries(tag: str) -> None:
-  assert is_valid_language_tag(tag)
-  assert validate_language_tag(tag) == tag
+  assert is_well_formed_language_tag(tag)
+  assert validate_language_tag_is_well_formed(tag) == tag
 
 
 @pytest.mark.parametrize("singleton", string.ascii_letters + string.digits)
 def test_every_ascii_alphanumeric_can_introduce_a_sequence(singleton: str) -> None:
   # X/x introduce private use; every other character is an extension singleton.
-  assert is_valid_language_tag(f"en-{singleton}-ab")
+  assert is_well_formed_language_tag(f"en-{singleton}-ab")
 
 
 @pytest.mark.parametrize("singleton", string.ascii_letters + string.digits)
 def test_only_private_use_allows_a_one_character_body(singleton: str) -> None:
-  assert is_valid_language_tag(f"en-{singleton}-a") is (singleton in "xX")
+  assert is_well_formed_language_tag(f"en-{singleton}-a") is (singleton in "xX")
 
 
 @pytest.mark.parametrize(
@@ -217,8 +217,8 @@ def test_only_private_use_allows_a_one_character_body(singleton: str) -> None:
   ],
 )
 def test_well_formedness_does_not_enforce_validity(tag: str) -> None:
-  assert is_valid_language_tag(tag)
-  assert validate_language_tag(tag) == tag
+  assert is_well_formed_language_tag(tag)
+  assert validate_language_tag_is_well_formed(tag) == tag
 
 
 MALFORMED_TAGS = (
@@ -313,13 +313,13 @@ MALFORMED_TAGS = (
 
 @pytest.mark.parametrize("tag", MALFORMED_TAGS)
 def test_predicate_rejects_malformed_tags(tag: str) -> None:
-  assert not is_valid_language_tag(tag)
+  assert not is_well_formed_language_tag(tag)
 
 
 @pytest.mark.parametrize("tag", MALFORMED_TAGS)
 def test_validator_raises_for_malformed_tags(tag: str) -> None:
   with pytest.raises(ValueError):
-    validate_language_tag(tag)
+    validate_language_tag_is_well_formed(tag)
 
 
 @pytest.mark.parametrize(
@@ -355,24 +355,24 @@ def test_validator_raises_for_malformed_tags(tag: str) -> None:
   ],
 )
 def test_non_ascii_is_rejected_in_every_production(tag: str) -> None:
-  assert not is_valid_language_tag(tag)
+  assert not is_well_formed_language_tag(tag)
   with pytest.raises(ValueError):
-    validate_language_tag(tag)
+    validate_language_tag_is_well_formed(tag)
 
 
 @pytest.mark.parametrize(
   "tag", ["mn-Cyrl-MN", "MN-cYRL-mn", "mN-cYrL-Mn", "eN-a-AbCd-X-pRiVaTe", "X-aBc-123", "EN-GB-OED"]
 )
 def test_validation_preserves_spelling(tag: str) -> None:
-  assert validate_language_tag(tag) == tag
+  assert validate_language_tag_is_well_formed(tag) == tag
 
 
 @pytest.mark.parametrize("value", [None, True, False, 42, 1.5, b"en", ["en"], ("en",), {"tag": "en"}])
 def test_predicate_returns_false_for_non_strings(value: object) -> None:
-  assert is_valid_language_tag(value) is False
+  assert is_well_formed_language_tag(value) is False
 
 
 @pytest.mark.parametrize("value", [None, True, False, 42, 1.5, b"en", ["en"], ("en",), {"tag": "en"}])
 def test_validator_raises_type_error_for_non_strings(value: object) -> None:
   with pytest.raises(TypeError):
-    validate_language_tag(value)
+    validate_language_tag_is_well_formed(value)
