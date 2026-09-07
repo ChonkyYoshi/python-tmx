@@ -1,17 +1,20 @@
 """Enums, Annotated value aliases, parse/format functions.
 
 Value aliases are public Pydantic functional metadata so a value is honestly
-its Python type: a ``TMXDatetime`` is a ``datetime``. The markers make XML
-parsing and output formatting -- and JSON, which shares one formatter per
-type -- flow through the same functions.
+its Python type: a ``TMXDatetime`` is a ``datetime``. BeforeValidators accept
+a narrow input repertoire and reject everything else with ``ValueError``, so
+Pydantic surfaces rejections as ``ValidationError`` with the cause retained;
+no parser raises ``TypeError``, which Pydantic would not catch. Serializers
+split Python from JSON: ``model_dump()`` keeps native values, JSON mode and
+XML output share one string formatter per type (``when_used="json"``).
 
 Language-tag validation lives in ``bcp47.py`` (grammar-only, RFC 5646) and is
-used here through its ``validate_language_tag``.
+used here through its ``validate_language_tag_is_well_formed``.
 """
 
 import codecs
 import warnings
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BeforeValidator, PlainSerializer
@@ -57,67 +60,105 @@ _DECIMAL_DIGITS = "0123456789"
 def parse_integer(value: object) -> int:
   """Parse a decimal integer, e.g. ``usagecount``, ``i``, ``x``.
 
-  Strict ASCII digits: no sign, no whitespace, no ``int()`` conveniences
-  such as underscores. SGML ``NUMBER`` admits digits only, so negatives
-  are rejected. Already-integer values pass through; strict mode rejects
-  ``bool`` downstream.
+  The spec types these attributes as numbers, so the same unsigned domain
+  holds for every input form: native integers must be non-negative, and
+  strings must be pure ASCII digits -- no sign, whitespace, underscore, or
+  other ``int()`` conveniences. Leading zeros are accepted but their
+  spelling is not retained. Booleans are rejected even though ``bool`` is
+  an ``int`` subclass; so are floats. Raises ``ValueError`` for all of it.
   """
+  if isinstance(value, bool):
+    raise ValueError("a boolean is not a number here, even though bool subclasses int")
   if isinstance(value, int):
+    if value < 0:
+      raise ValueError(f"expected an unsigned integer, got {value!r}")
     return value
-  if not isinstance(value, str):
-    raise TypeError(f"expected a string, got {type(value)!r}")
-  if not value or any(digit not in _DECIMAL_DIGITS for digit in value):
-    raise ValueError("expected decimal digits, e.g. '42'")
-  return int(value)
+  if isinstance(value, str):
+    if not value or any(digit not in _DECIMAL_DIGITS for digit in value):
+      raise ValueError(f"expected decimal digits, e.g. '42', got {value!r}")
+    return int(value)
+  raise ValueError(f"expected an unsigned integer or a decimal-digit string, got {type(value).__name__!r}")
 
 
 def format_integer(value: int) -> str:
-  """Format an integer as canonical decimal digits."""
+  """Format an integer as canonical decimal digits (JSON and XML)."""
   return str(value)
 
 
-type TMXInteger = Annotated[int, BeforeValidator(parse_integer), PlainSerializer(format_integer, return_type=str)]
+type TMXInteger = Annotated[
+  int, BeforeValidator(parse_integer), PlainSerializer(format_integer, return_type=str, when_used="json")
+]
 
 
 def parse_datetime(value: object) -> datetime:
-  """Parse an ISO 8601 instant, e.g. ``creationdate``.
+  """Parse a date-time value, e.g. ``creationdate``.
 
-  The spec requires ISO 8601 and only recommends ``YYYYMMDDTHHMMSSZ``, so
-  any ISO 8601 instant is accepted: basic or extended, with or without an
-  offset. A naive value means UTC. Date-only forms are rejected. The
-  result is truncated to whole seconds so ``datetime.now(UTC)`` just
-  works. Already-datetime values take the same path.
+  Accepts native ``datetime`` values and strings parseable by
+  ``datetime.fromisoformat()`` -- deliberately bounded to that parser's
+  repertoire, not the full ISO 8601 standard. Input must combine a date
+  and a time: date-only strings are rejected even though ``fromisoformat``
+  would accept them as midnight, detected with ``date.fromisoformat``
+  (which succeeds exactly on date-only input). Native ``date`` and ``time``
+  objects are rejected as unsupported types.
+
+  A naive value is assumed to be UTC and stamped with it; an explicit
+  offset is retained as-is, never converted. Fractional seconds are kept
+  to ``datetime``'s microsecond precision (``fromisoformat`` truncates
+  beyond it, which is part of the bounded policy).
   """
-  if not isinstance(value, datetime):
-    if not isinstance(value, str):
-      raise TypeError(f"expected a string or datetime, got {type(value)!r}")
-    if "t" not in value.lower():
-      raise ValueError("expected an instant with date and time, not a date-only value")
+  if isinstance(value, datetime):
+    parsed = value
+  elif isinstance(value, str):
     try:
-      value = datetime.fromisoformat(value)
+      date.fromisoformat(value)
     except ValueError:
-      raise ValueError(f"not an ISO 8601 instant: {value!r}") from None
-  if value.tzinfo is None:
-    value = value.replace(tzinfo=UTC)
-  return value.replace(microsecond=0)
+      pass
+    else:
+      raise ValueError(f"a date without a time is not an instant: {value!r}")
+    try:
+      parsed = datetime.fromisoformat(value)
+    except ValueError as error:
+      raise ValueError(f"not an ISO 8601 date-time: {value!r}") from error
+  else:
+    raise ValueError(f"expected a datetime or an ISO 8601 date-time string, got {type(value).__name__!r}")
+  if parsed.tzinfo is None:
+    parsed = parsed.replace(tzinfo=UTC)
+  return parsed
 
 
 def format_datetime(value: datetime) -> str:
-  """Format an instant in the spec's canonical basic form.
+  """Format a date-time for JSON and XML output, keeping its offset.
 
-  ``YYYYMMDDTHHMMSSZ`` in UTC; a naive datetime is taken as UTC. Manual
-  formatting because ``strftime``'s ``%Y`` zero-padding for years below
-  1000 is platform-dependent.
+  Basic ISO 8601 ``YYYYMMDDTHHMMSS`` -- the form the spec recommends --
+  with ``Z`` for a zero/absent offset (naive values are assumed UTC) and
+  ``+HHMM``/``-HHMM`` otherwise, so an explicitly supplied offset survives
+  output instead of being normalized to UTC. An offset's seconds, which
+  ``fromisoformat`` can produce, are appended only when present. Fractional
+  seconds are emitted to ``datetime``'s precision, only when nonzero, as
+  in ``datetime.isoformat()``. Manual formatting for predictable year
+  zero-padding, which ``strftime``'s ``%Y`` does not guarantee.
   """
-  if value.tzinfo is None:
-    value = value.replace(tzinfo=UTC)
+  offset = value.utcoffset()
+  if offset is None or offset == timedelta(0):
+    suffix = "Z"
   else:
-    value = value.astimezone(UTC)
-  return f"{value.year:04d}{value.month:02d}{value.day:02d}T{value.hour:02d}{value.minute:02d}{value.second:02d}Z"
+    seconds = round(offset.total_seconds())
+    sign = "+" if seconds >= 0 else "-"
+    hours, remainder = divmod(abs(seconds), 3600)
+    minutes, offset_seconds = divmod(remainder, 60)
+    suffix = f"{sign}{hours:02d}{minutes:02d}"
+    if offset_seconds:
+      suffix += f"{offset_seconds:02d}"
+  fraction = f".{value.microsecond:06d}" if value.microsecond else ""
+  return (
+    f"{value.year:04d}{value.month:02d}{value.day:02d}"
+    f"T{value.hour:02d}{value.minute:02d}{value.second:02d}"
+    f"{fraction}{suffix}"
+  )
 
 
 type TMXDatetime = Annotated[
-  datetime, BeforeValidator(parse_datetime), PlainSerializer(format_datetime, return_type=str)
+  datetime, BeforeValidator(parse_datetime), PlainSerializer(format_datetime, return_type=str, when_used="json")
 ]
 
 
@@ -125,7 +166,7 @@ def validate_identifier(value: str) -> str:
   """Check an identifier contains no whitespace, as the spec requires
   for ``tuid``."""
   if any(character.isspace() for character in value):
-    raise ValueError("must not contain whitespace")
+    raise ValueError(f"expected a string without whitespace, got {value!r}")
   return value
 
 
@@ -155,24 +196,28 @@ def parse_hex_integer(value: object) -> int:
   """Parse a ``#x``-prefixed hexadecimal integer, e.g. ``#xF8FF``.
 
   The format the TMX spec prescribes for ``<map unicode>`` and
-  ``<map code>``. Strictly ``#x`` plus hexadecimal digits: no ``0x``, no
-  sign, no whitespace, no ``int()`` conveniences such as underscores.
-  Already-integer values pass through so Python and JSON-python inputs
-  work.
+  ``<map code>``. Strictly ``#x`` plus ASCII hexadecimal digits: no
+  ``0x``, no sign, no whitespace, no ``int()`` conveniences such as
+  underscores. Native integers must be non-negative; booleans and floats
+  are rejected like any other unsupported type. Leading zeros are accepted
+  but their spelling is not retained. Raises ``ValueError`` for all of it.
   """
+  if isinstance(value, bool):
+    raise ValueError("a boolean is not a number here, even though bool subclasses int")
   if isinstance(value, int):
+    if value < 0:
+      raise ValueError(f"expected an unsigned value, got {value}")
     return value
-  if not isinstance(value, str):
-    raise TypeError(f"expected a string, got {type(value)!r}")
-  if not value.startswith("#x"):
-    raise ValueError("expected a '#x' prefix, e.g. '#xF8FF'")
-  digits = value[2:]
-  if not digits:
-    raise ValueError("missing digits after '#x'")
-  for digit in digits:
-    if digit not in _HEX_DIGITS:
-      raise ValueError(f"invalid hexadecimal digit {digit!r}")
-  return int(digits, 16)
+  if isinstance(value, str):
+    if not value.startswith("#x"):
+      raise ValueError(f"expected a '#x' prefix, e.g. '#xF8FF', got {value!r}")
+    digits = value[2:]
+    if not digits:
+      raise ValueError(f"expected hexadecimal digits after '#x', e.g. '#xF8FF', got {value!r}")
+    if any(digit not in _HEX_DIGITS for digit in digits):
+      raise ValueError(f"expected hexadecimal digits after '#x', e.g. '#xF8FF', got {value!r}")
+    return int(digits, 16)
+  raise ValueError(f"expected an unsigned integer or a '#x'-prefixed string, got {type(value).__name__!r}")
 
 
 def format_hex_integer(value: int) -> str:
@@ -185,20 +230,20 @@ def validate_unicode_scalar(value: int) -> int:
 
   0 to 0x10FFFF, surrogates excluded; Private Use areas allowed per spec.
   """
-  if not 0 <= value <= 0x10FFFF or 0xD800 <= value <= 0xDFFF:
-    raise ValueError("not a valid Unicode scalar value")
+  if not (0 <= value <= 0x10FFFF) or (0xD800 <= value <= 0xDFFF):
+    raise ValueError(f"expected a valid Unicode scalar value, got {value!r}")
   return value
 
 
 def validate_ascii(value: str) -> str:
   """Check text is ASCII, as the spec requires for ``ent`` and ``subst``."""
   if not value.isascii():
-    raise ValueError("must be ASCII")
+    raise ValueError(f"expected ASCII text, got {value!r}")
   return value
 
 
 type TMXHexInteger = Annotated[
-  int, BeforeValidator(parse_hex_integer), PlainSerializer(format_hex_integer, return_type=str)
+  int, BeforeValidator(parse_hex_integer), PlainSerializer(format_hex_integer, return_type=str, when_used="json")
 ]
 type TMXUnicodeCodePoint = Annotated[TMXHexInteger, AfterValidator(validate_unicode_scalar)]
 type TMXAsciiText = Annotated[str, AfterValidator(validate_ascii)]

@@ -56,7 +56,7 @@ type SubContentItem = str | Sub
 
 
 class TmxModel(BaseModel):
-  model_config = ConfigDict(extra="forbid", strict=True, validate_assignment=True)
+  model_config = ConfigDict(extra="forbid", strict=True, validate_assignment=True, validation_error_cause=True)
 
 
 class Note(TmxModel):
