@@ -210,6 +210,15 @@ still to be designed. Do not assume `model_validate(existing_model)` deeply
 revalidates existing instances: Pydantic trusts instances by default, so any such
 entry point must deliberately ensure the required validation actually runs.
 
+Two verified edge behaviors that follow from this policy: (a) per-assignment
+checks cannot see two-step cycles -- `h1.content = (h2,); h2.content = (h1,)`
+passes each local check and produces a model that fails serialization; cycle
+detection is a candidate for the decision-11 explicit checks and the writer
+boundary, and the hazard is documented for users. (b) `model_construct` and
+`model_copy(update=...)` bypass validation entirely and can embed invalid
+states; only a data round trip (`model_validate(model.model_dump())`) is a deep
+check today. Both are pinned by tests.
+
 The writer is the final conformance boundary: it must check applicable domain/prose
 rules as well as DTD structure before accepting data for output. Successfully
 completed output must be spec-compliant TMX, not necessarily meaningful or complete
@@ -335,7 +344,10 @@ descriptive of producers, not a validation rule.
 cheap, following the legacy `lang` pattern from decision 8). A `<map>` with
 none of `code`/`ent`/`subst` warns (the spec's "should", R1 in the audit).
 Unknown `datatype`/`type` values do not warn: their recommended lists are
-explicitly non-exhaustive, so any string is contract-legal. A far-future
+explicitly non-exhaustive, so any string is contract-legal. Standard Python
+warning semantics apply on top: under default filters, identical advisories
+deduplicate per message and call site, and `-W error` escalation turns them
+into exceptions rather than `ValidationError`s. A far-future
 convenience (autocomplete-friendly `Literal | str` aliases for the recommended
 lists) is parked, not scheduled.
 
@@ -349,8 +361,6 @@ attribute.
 
 ## Housekeeping / verification later
 
-- The `models.py` module docstring still refers to `types.py`, now `validators.py`.
-  The plan has been updated for that rename and the separate `bcp47.py` module.
 - The plan now reflects the existing `ruff.toml` settings: two-space indentation
   and 120-character lines. No formatter configuration was changed.
 - XML modules and `io.py` are placeholders; the error hierarchy only has

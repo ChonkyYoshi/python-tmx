@@ -1,7 +1,7 @@
 """All Pydantic TMX models (recursive family, one module).
 
 Node shapes, the mechanical field naming, and the two inline content
-grammars. Value typing and conversion live in ``types.py``; this module only
+grammars. Value typing and conversion live in ``validators.py``; this module only
 references the aliases.
 
 Field naming is mechanical: the TMX attribute name with ``-`` and ``:``
@@ -45,8 +45,10 @@ def _as_tuple[T](value: list[T] | tuple[T, ...]) -> tuple[T, ...]:
 
   Tuples close the mutation hole that ``validate_assignment`` cannot see:
   ``model.items.append(x)`` is invisible, ``model.items += (x,)`` rebinds and
-  revalidates. Values of any other type pass through untouched so the strict
-  tuple check rejects them with a proper Pydantic error.
+  revalidates. A list operand to ``+=`` is a plain ``TypeError`` (tuple and
+  list do not concatenate) -- convert first. Values of any other type pass
+  through untouched so the strict tuple check rejects them with a proper
+  Pydantic error.
   """
   return tuple(value) if isinstance(value, list) else value
 

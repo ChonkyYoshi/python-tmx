@@ -37,7 +37,9 @@ from hypomnema.models import (
   Ude,
 )
 
-SEG_NODES = (Bpt(i=1), Ept(i=1), It(pos="begin"), Ph(), Hi(), Ut())
+with warnings.catch_warnings():
+  warnings.simplefilter("ignore")  # the ut advisory is tested on its own
+  SEG_NODES = (Bpt(i=1), Ept(i=1), It(pos="begin"), Ph(), Hi(), Ut())
 
 type LangModelFactory = Callable[..., Note | Property | TranslationUnitVariant]
 
@@ -99,6 +101,20 @@ def test_ude_requires_at_least_one_map() -> None:
     Ude.model_validate({"name": "example"})
 
 
+def test_empty_variants_are_rejected_on_assignment() -> None:
+  tu = TranslationUnit(variants=(variant(),))
+  with pytest.raises(ValidationError):
+    tu.variants = ()
+  with pytest.raises(ValidationError):
+    tu.variants = as_runtime_input([])
+
+
+def test_empty_maps_are_rejected_on_assignment() -> None:
+  ude = Ude(name="u", maps=(Map(unicode=as_runtime_input("#x41"), ent="A"),))
+  with pytest.raises(ValidationError):
+    ude.maps = ()
+
+
 def test_a_single_variant_is_legal() -> None:
   # DTD floor is tuv+; the "logically two" prose is a convention, not a rule.
   tu = TranslationUnit(variants=(variant(),))
@@ -107,6 +123,13 @@ def test_a_single_variant_is_legal() -> None:
 
 def test_empty_segment_content_is_legal() -> None:
   assert variant().content == ()
+
+
+def test_empty_string_content_items_are_accepted() -> None:
+  # GAPS decision 9 leaves XML round-trip semantics open; this pins the
+  # model-layer baseline the decision starts from.
+  tuv = variant("en", "", "after")
+  assert tuv.content == ("", "after")
 
 
 def test_tuv_metadata_and_content_are_independent() -> None:
@@ -185,7 +208,9 @@ TAGGED_INLINE = (
 
 @pytest.mark.parametrize(("data", "expected"), TAGGED_INLINE)
 def test_tagged_inline_dicts_select_their_model(data: Any, expected: type) -> None:
-  tuv = TranslationUnitVariant(xml_lang="en", content=(data,))
+  with warnings.catch_warnings():
+    warnings.simplefilter("ignore")  # the ut advisory is tested on its own
+    tuv = TranslationUnitVariant(xml_lang="en", content=(data,))
   assert type(tuv.content[0]) is expected
 
 
@@ -267,6 +292,21 @@ def test_sub_content_takes_the_general_grammar() -> None:
   assert type(s.content[2]) is Hi
 
 
+def test_hi_content_rejects_sub() -> None:
+  with pytest.raises(ValidationError):
+    Hi(content=as_runtime_input([Sub()]))
+
+
+def test_sub_is_reachable_through_bpt_inside_hi() -> None:
+  inner_sub = Sub(content=("x",))
+  inner_bpt = Bpt(i=1, content=(inner_sub,))
+  outer = Hi(content=(inner_bpt,))
+  paired = outer.content[0]
+  assert isinstance(paired, Bpt)
+  assert paired.content[0] is inner_sub
+  assert paired.content[0].content == ("x",)
+
+
 def test_sub_does_not_nest_directly() -> None:
   with pytest.raises(ValidationError):
     Sub(content=as_runtime_input([Sub()]))
@@ -304,6 +344,22 @@ def test_header_metadata_preserves_ude_interleaving() -> None:
 
 def test_header_metadata_is_optional() -> None:
   assert header().metadata == ()
+
+
+def test_header_required_attributes_are_enforced() -> None:
+  attributes = {
+    "creationtool": "ct",
+    "creationtoolversion": "1.0",
+    "segtype": "sentence",
+    "o_tmf": "tmf",
+    "adminlang": "en",
+    "srclang": "en",
+    "datatype": "plaintext",
+  }
+  for missing in attributes:
+    partial = {key: value for key, value in attributes.items() if key != missing}
+    with pytest.raises(ValidationError):
+      Header.model_validate(partial)
 
 
 # Deprecated language attributes (GAPS decision 8).
@@ -430,6 +486,36 @@ def test_exclude_defaults_can_drop_the_tag() -> None:
   dumped = Hi().model_dump(exclude_defaults=True)
   assert "element" not in dumped
   assert Hi.model_validate(dumped) == Hi()
+
+
+# Instance-trust policy (decision 7, verified by tests as it demands):
+# Pydantic trusts existing model instances; only a data round trip is a
+# deep check.
+
+
+def test_model_validate_of_an_instance_is_identity() -> None:
+  tu = TranslationUnit(variants=(variant(),))
+  assert TranslationUnit.model_validate(tu) is tu
+
+
+def test_constructed_invalid_children_embed_silently() -> None:
+  # model_construct and model_copy(update=...) bypass validation entirely.
+  bad = TranslationUnitVariant.model_construct(xml_lang="NOT A TAG", content=("x",))
+  assert TranslationUnit(variants=(bad,)).variants == (bad,)  # accepted at construction
+  tu = TranslationUnit(variants=(variant(),))
+  tu.variants = (bad,)  # accepted at assignment
+  assert tu.variants == (bad,)
+  forged = variant().model_copy(update={"lang": "NOT A TAG"})
+  assert forged.lang == "NOT A TAG"
+
+
+def test_only_a_data_round_trip_is_a_deep_check() -> None:
+  bad = TranslationUnitVariant.model_construct(xml_lang="NOT A TAG", content=("x",))
+  tu = TranslationUnit.model_construct(variants=(bad,))
+  with pytest.raises(ValidationError):
+    TranslationUnit.model_validate(tu.model_dump())
+  with pytest.raises(ValidationError):
+    TranslationUnit.model_validate_json(tu.model_dump_json())
 
 
 def test_validation_error_causes_are_retained_through_models() -> None:
