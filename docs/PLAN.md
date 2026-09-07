@@ -12,7 +12,7 @@ that necessarily exists yet.
 
 Sources of truth:
 
-- [TMX 1.4b specification](src/hypomnema/resources/Spec-TMX-1.4b.md), converted
+- [TMX 1.4b specification](Spec-TMX-1.4b.md), converted
   from the official GALA publication: value semantics, prose requirements,
   recommendations, and examples. The DTD is not a substitute for this text.
 - [Bundled DTD](src/hypomnema/resources/tmx14.dtd): element/attribute inventory
@@ -33,7 +33,9 @@ Sources of truth:
   covers RFC examples, all grandfathered literals, grammar boundaries,
   malformed input, and API behavior. The last recorded run passed 529 cases;
   the suite is under review.
-- **`validators.py` and `models.py` are implemented but not yet tested.**
+- **`validators.py` is implemented and tested.** `tests/test_validators.py` locks
+  the value contracts (GAPS 1-3, including the lossless datetime-offset policy).
+- **`models.py` is implemented but not yet tested.**
   They still need the agreed changes: native unsigned-number enforcement,
   validation-error causes, Python-native dumps, datetime offset/precision
   preservation, explicit union discrimination, model cardinality constraints,
@@ -44,14 +46,11 @@ Sources of truth:
   public facade in `__init__.py` are placeholders. `errors.py` currently
   defines only `TmxWarning`, used for unknown encoding-name advisories.
   Whole-tree validation APIs and the prose-rule audit are also pending.
-- **Some XML experiments exist.** `spike/` contains detached-fragment DTD
-  validation, DTD cost, and `xmlfile` lifecycle/buffering experiments. These
-  are not an automated conformance suite or proof of end-to-end streaming
-  safety, memory bounds, or performance.
 - **Testing infrastructure is minimal.** `pytest.toml` discovers `tests/`,
   uses importlib import mode, and enables strict configuration/marker checks.
-  No coverage or property-testing dependencies, CI configuration, or
-  XML/model/value test suites have been added.
+  The grammar (529 cases) and value (220 cases) suites exist; model, XML, and
+  I/O suites do not. No coverage or property-testing dependencies or CI
+  configuration have been added.
 - **Resources are present in the checkout.** DTD inclusion in a built wheel
   and loading through package resources outside the checkout still need
   verification. The README/facade have not been brought up to date for v2.
@@ -148,7 +147,10 @@ src/hypomnema/
   io.py         TmxReader, TmxWriter, HeaderPeek
   resources/
     tmx14.dtd
-    Spec-TMX-1.4b.md
+
+The spec text and the prose-audit working documents live in `docs/`
+(`Spec-TMX-1.4b.md`, `spec_audit.md`, `crossreference.md`), not in the
+package; only the DTD ships as a resource.
 ```
 
 Dependencies point one way: errors and the independent BCP 47 module, then
@@ -315,17 +317,37 @@ advisories still need implementation.
 
 ## Prose-rule audit
 
-Before claiming full strictness, audit the complete TMX spec, not only its
-DTD. Mandatory requirements become validation rules. Recommendations may
-warrant warnings when actionable; examples and conventions must not become
-requirements merely because the spec illustrates them.
+The complete spec prose has been audited against the DTD: a spec-only pass
+(`spec_audit.md`) followed by a cross-reference against this plan, the
+recorded decisions, and the code (`crossreference.md`). Mandatory prose rules
+become validation rules; recommendations may warrant warnings; examples and
+conventions never become requirements merely because the spec illustrates
+them. Most findings are already covered by the value layer, excluded by prior
+decisions, or deferred to XML/I-O work; the remainder is settled as GAPS
+decisions 11-16:
 
-Known broader rules include `Ude.base` when a child map has `code`, paired
-`bpt`/`ept` identifiers, and unique `bpt.i` values within a segment. The spec
-permits overlapping native code pairs, so an XML-style stack-nesting check
-would be wrong. Scope across nested `hi`/`sub` content and the placement/API
-of checks remain to be settled during the audit. No claim is made that this
-short list is exhaustive or that those validators already exist.
+- **Two-tier validation (11):** cheap local constraints and advisories run
+  automatically in models; expensive cross-node correctness checks are public
+  explicit functions that the writer always calls before converting anything
+  to XML.
+- **bpt/ept pairing and `bpt.i` uniqueness (12):** enforced per flow scope --
+  a variant's segment content and each `<sub>`'s content, with `<hi>`
+  transparent -- using per-`i` matching with ordering, deliberately not stack
+  nesting, since the spec permits overlapping native code pairs.
+- **Cross-variant `x` correspondence (13):** advisory (one `TmxWarning` per
+  translation unit on disagreement), never an error; Level-2 parity is not
+  enforced.
+- **Inheritance/defaulting semantics (14):** documented resolution semantics,
+  never materialized or enforced.
+- **Warnings (15):** `<ut>` use and `<map>` without `code`/`ent`/`subst` warn;
+  non-recommended `datatype`/`type` values do not.
+- **`version` (16):** required present and exactly `1.4` on read; the writer
+  always emits it.
+
+The spec also contains DTD/spec mismatches worth knowing (the tmx15.dtd URL
+typo, the undocumented deprecated `lang`, `version` required-vs-`#FIXED`) and
+the seg-whitespace rule applies to `<seg>` only, not `<hi>`/`<sub>` -- see
+`crossreference.md` section 5.
 
 ## Projection: hardcoded plans
 
@@ -528,8 +550,7 @@ not a prerequisite for creating a model.
 
 `uv run pytest` runs every current test by default. No mocks are needed for
 the existing grammar suite. Coverage and property-based testing may be useful
-later, but no dependencies or coverage target have been adopted. Existing
-spike scripts remain experiments, not substitutes for assertions in the suite.
+later, but no dependencies or coverage target have been adopted.
 
 ## Performance posture
 
@@ -546,9 +567,10 @@ verified performance of the current placeholders:
   plus read-back), and compared implementations must not share the algorithm
   under test. Shared mixed-content bugs can make equivalence checks pass
   vacuously.
-- A per-fragment DTD cost spike exists. Measure validation's cost in the
-  first actual end-to-end streaming benchmark before optimizing anything;
-  there is no current integrated pipeline to benchmark yet.
+- Earlier per-fragment DTD-cost experiments (scripts since removed; their
+  conclusions are retained here) suggest validation is affordable, but measure
+  in the first actual end-to-end streaming benchmark before optimizing
+  anything; there is no current integrated pipeline to benchmark yet.
 
 ## Roads deliberately not taken
 
@@ -593,7 +615,8 @@ accidental current behavior.
    interleave, and walkers. Resolve GAPS #9's XML/text boundary questions,
    verify recursive discriminated aliases on the real shapes, and add DTD
    agreement and independent-oracle tests after review.
-6. **Build reader and writer.** Revisit the existing XML spikes, resolve
+6. **Build reader and writer.** Reapply the earlier XML spike conclusions
+   (lifecycle, buffering, DTD cost), resolve
    GAPS #10's internal-subset/entity policy, and verify hardened parsing,
    validate-before-commit, lifecycle, domain conformance, and bounded memory.
    Then add the corresponding I/O suite and end-to-end streaming benchmark.
@@ -601,5 +624,5 @@ accidental current behavior.
    the facade/`__all__`, update the README, and document the settled API and
    guarantees. CI and any additional test tooling can be chosen when needed.
 
-A failed spike changes this plan, not an excuse to silently weaken the
+A failed experiment changes this plan, not an excuse to silently weaken the
 agreed validation or safety contract.

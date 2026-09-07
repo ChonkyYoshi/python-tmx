@@ -3,17 +3,18 @@
 Working review sheet, not a replacement for `PLAN.md` or a list of behavior to
 preserve just because the implementation currently does it. Edit the **Decision**
 lines directly. Decisions 1–8 are incorporated into the updated plan but still
-await implementation/testing; the API and scope of the prose audit remain future
-work. Questions 9–10 are deferred to XML/I/O. The independent BCP 47 grammar suite
-is implemented and under review. Observations retain the context of the initial
-review; a recorded decision is not a claim that the code already implements it.
+await implementation/testing; the API and scope of the broader validation are
+settled as decisions 11–16 after the prose audit. Questions 9–10 are deferred
+to XML/I/O. The BCP 47 grammar and value suites are implemented and reviewed.
+Observations retain the context of the initial review; a recorded decision is
+not a claim that the code already implements it.
 
 Sources of truth:
 
 - [`PLAN.md`](PLAN.md): intended library policy and architecture.
-- [TMX 1.4b specification](src/hypomnema/resources/Spec-TMX-1.4b.md): value semantics,
+- [TMX 1.4b specification](Spec-TMX-1.4b.md): value semantics,
   cross-field requirements, and recommendations that the DTD cannot express.
-- [TMX DTD](src/hypomnema/resources/tmx14.dtd): XML attributes and content models.
+- [TMX DTD](../src/hypomnema/resources/tmx14.dtd): XML attributes and content models.
 - [RFC 5646](https://www.rfc-editor.org/rfc/rfc5646.html), sections 2.1 and 2.2.9:
   language-tag syntax and the distinction between well-formedness and validity.
 
@@ -270,6 +271,79 @@ data, and the chosen entity behavior using hostile fixtures. Do not weaken parsi
 limits merely to make a fixture pass.
 
 **Decision:**
+
+## Prose-rule audit (decisions 11-16)
+
+Recorded after the completed spec-vs-DTD audit (independent spec-only pass in
+`spec_audit.md`, cross-reference against this sheet and the code in
+`crossreference.md`). These decisions supersede the "to be settled when
+this work begins" hedges in decisions 6 and 7.
+
+### 11. Broader validation is two-tier
+
+**Decision:** cheap local constraints and cheap advisories run automatically
+through Pydantic validation and assignment. Expensive cross-node correctness
+checks are never automatic: they are public, explicit, model-scope validation
+functions the user invokes at their own runtime cost, and the writer always
+calls them before converting a model to XML -- successfully completed output
+must be spec-compliant. Explicit check functions raise Pydantic
+`ValidationError` at the model level (consistent with decision 2); the writer
+wraps failures into `TmxSpecError` with context. Post-mutation revalidation
+still requires an explicit call; there is no parent tracking (decision 7).
+
+### 12. bpt/ept pairing and `bpt.i` uniqueness: per-flow scopes
+
+**Decision:** scopes are the "flow" containers: a variant's segment content,
+and each `<sub>`'s content. `<sub>` represents an embedded segment's own flow,
+so its inline elements pair within it and reuse of `i` across scopes is legal.
+`<hi>` is transparent: a highlight lives in the current flow, so its inline
+elements join the enclosing flow's namespace (including a `<sub>` scope when
+nested there). Within one flow, in document order: every `bpt` must have a
+corresponding `ept` and every `ept` a corresponding `bpt` (an unmatched element
+of either kind is an error; the spec mandates the bpt direction, we add the
+ept direction for strictness), `i` values are unique among `bpt`s and among
+`ept`s, and each `ept` appears after its `bpt`. Matching is per-`i` with
+ordering, deliberately NOT stack nesting: the spec permits overlapping native
+code pairs. Enforced by the decision-11 explicit checks, plus DTD-independent
+agreement tests.
+
+### 13. Cross-variant `x` correspondence is advisory
+
+**Decision:** the spec's `x`-matching and Level-2 parity text (§4.3 under
+"Assuming:") defines tool capability, not document validity; enforcing tag
+parity as an error would reject DTD-valid files. When a variant's set of `x`
+values (from `bpt`, `it`, `ph`, `hi`, including nested content) disagrees with
+a sibling variant's, emit one `TmxWarning` per translation unit as part of the
+tu-level explicit check. Never an error.
+
+### 14. Inherited and defaulted attributes are documented, not enforced
+
+**Decision:** the spec's inheritance semantics (tu `segtype`/`srclang` fall
+back to the header, `datatype` defaults to "unknown", header `adminlang`
+languages note/prop) are instructions for applications interpreting missing
+attributes -- an app-level concern like registry validity, out of our
+correctness-and-grammar scope. Nothing is materialized into models (that would
+break round-trip fidelity) and nothing is enforced. Resolution semantics are
+documented for consumers. The `srclang`-equals-source-`xml_lang` clause is
+descriptive of producers, not a validation rule.
+
+### 15. Deprecation and recommendation warnings
+
+**Decision:** using the deprecated `<ut>` warns with `TmxWarning` (automatic,
+cheap, following the legacy `lang` pattern from decision 8). A `<map>` with
+none of `code`/`ent`/`subst` warns (the spec's "should", R1 in the audit).
+Unknown `datatype`/`type` values do not warn: their recommended lists are
+explicitly non-exhaustive, so any string is contract-legal. A far-future
+convenience (autocomplete-friendly `Literal | str` aliases for the recommended
+lists) is parked, not scheduled.
+
+### 16. `version` is required on read
+
+**Decision:** the reader requires `<tmx version="1.4">` at init -- present AND
+exactly `1.4` -- and raises `TmxSpecError` otherwise; the writer always emits
+it. `attribute_defaults=False` makes absence observable, and the internal-subset
+verification from question 10 must confirm no hostile fixture can inject the
+attribute.
 
 ## Housekeeping / verification later
 
