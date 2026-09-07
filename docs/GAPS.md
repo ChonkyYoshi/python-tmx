@@ -2,12 +2,13 @@
 
 Working review sheet, not a replacement for `PLAN.md` or a list of behavior to
 preserve just because the implementation currently does it. Edit the **Decision**
-lines directly. Decisions 1–8 are incorporated into the updated plan but still
-await implementation/testing; the API and scope of the broader validation are
-settled as decisions 11–16 after the prose audit. Questions 9–10 are deferred
-to XML/I/O. The BCP 47 grammar and value suites are implemented and reviewed.
+lines directly. Decisions 1–5 and 8 are implemented and tested, as are the
+decision-11/12/13 explicit checks and the decision-15 warnings; decision 6 was
+resolved by the prose audit into decisions 11–16, and decision 7's writer-side
+half awaits the writer. Questions 9–10 are deferred to XML/I/O. The BCP 47
+grammar, value, model, and validation suites are implemented and reviewed.
 Observations retain the context of the initial review; a recorded decision is
-not a claim that the code already implements it.
+not a claim that the code already implements it beyond the suites named above.
 
 Sources of truth:
 
@@ -134,8 +135,8 @@ from guessing based on field shape.
   such as the `Sub` branch of `str | Sub`.
 
 The extra verbosity for hand-authored dictionaries is acceptable; explicit model
-constructors are the preferred Python construction interface. Implementation and
-contract tests are still pending.
+constructors are the preferred Python construction interface. (Implemented and
+tested in `tests/test_models.py`.)
 
 ### 5. Structurally incomplete models versus writer failures
 
@@ -144,7 +145,7 @@ DTD `tuv+` and `map+` requirements. `TranslationUnit.items` also permits notes a
 variants, which the DTD rejects. This followed the original plan's “DTD owns order
 and cardinality” direction, but conflicted with its claim that a writer DTD failure
 necessarily meant an internal model/projection bug rather than bad caller data.
-The revised plan incorporates the decision below; the code still needs updating.
+The revised plan incorporates the decision below; it is implemented and tested.
 An empty variant content tuple is different: it can represent a legal empty
 `<seg/>`, because the XML builder will supply the wrapper.
 

@@ -27,30 +27,34 @@ Sources of truth:
 - **Project shell exists.** Python 3.14 minimum; runtime dependencies are lxml
   and Pydantic. The dev group contains pytest, Ruff, ty, and types-lxml.
   `ruff.toml` currently sets two-space indentation and 120-character lines.
-- **`bcp47.py` is implemented and tested.** It checks RFC 5646 ABNF
-  well-formedness, not registry validity. Non-ASCII input is rejected before
-  case conversion, including Kelvin-sign lookalikes. `tests/test_bcp47.py`
-  covers RFC examples, all grandfathered literals, grammar boundaries,
-  malformed input, and API behavior. The last recorded run passed 529 cases;
-  the suite is under review.
-- **`validators.py` is implemented and tested.** `tests/test_validators.py` locks
-  the value contracts (GAPS 1-3, including the lossless datetime-offset policy).
-- **`models.py` is implemented but not yet tested.**
-  They still need the agreed changes: native unsigned-number enforcement,
-  validation-error causes, Python-native dumps, datetime offset/precision
-  preservation, explicit union discrimination, model cardinality constraints,
-  separate TU metadata/variants, and consistent language validation/warnings.
-  Current datetime code still truncates microseconds and writes UTC; current
-  unions are ordinary unions. These are pending changes, not the contract.
+- **`bcp47.py` is implemented, tested, and reviewed.** It checks RFC 5646
+  ABNF well-formedness, not registry validity. Non-ASCII input is rejected
+  before case conversion, including Kelvin-sign lookalikes.
+  `tests/test_bcp47.py` covers RFC examples, all grandfathered literals,
+  grammar boundaries, malformed input, and API behavior (529 cases; the
+  suite's expectations were also cross-checked against an independent ABNF
+  oracle).
+- **`validators.py` is implemented and tested.** `tests/test_validators.py`
+  locks the value contracts (GAPS 1-3, including the lossless
+  datetime-offset policy).
+- **`models.py` and `validation.py` are implemented and tested.** The models
+  carry the settled field names (``metadata``/``variants``, ``metadata``/
+  ``content``), explicit discrimination, nonempty required children, the
+  automatic language and deprecation advisories, and native-vs-JSON dump
+  semantics (`tests/test_models.py`). `validation.py` implements the
+  decision-11/12/13 explicit checks -- per-flow bpt/ept pairing, i
+  uniqueness, and the x advisory -- with fuzz-tested acceptance and
+  rejection (`tests/test_validation.py`). Both survived dedicated
+  adversarial reviews.
 - **XML/I/O are not implemented.** `io.py`, the modules in `xml/`, and the
   public facade in `__init__.py` are placeholders. `errors.py` currently
-  defines only `TmxWarning`, used for unknown encoding-name advisories.
-  Whole-tree validation APIs and the prose-rule audit are also pending.
+  defines only `TmxWarning`; whole-tree validation, DTD loading, and the
+  readers/writers remain.
 - **Testing infrastructure is minimal.** `pytest.toml` discovers `tests/`,
   uses importlib import mode, and enables strict configuration/marker checks.
-  The grammar (529 cases) and value (220 cases) suites exist; model, XML, and
-  I/O suites do not. No coverage or property-testing dependencies or CI
-  configuration have been added.
+  The grammar (529), value (220), model (84), and validation (30) suites
+  exist; XML and I/O suites do not. No coverage or property-testing
+  dependencies or CI configuration have been added.
 - **Resources are present in the checkout.** DTD inclusion in a built wheel
   and loading through package resources outside the checkout still need
   verification. The README/facade have not been brought up to date for v2.
@@ -155,9 +159,9 @@ package; only the DTD ships as a resource.
 ```
 
 Dependencies point one way: errors and the independent BCP 47 module, then
-validators, then models, then XML, then I/O. `models.py` never imports lxml.
-The location and public entry points of broader domain validation are still
-to be designed; do not invent a module/framework before the rules are audited.
+validators, then models, then validation, then XML, then I/O. `models.py`
+never imports lxml or validation; the writer is the only component that
+calls `validation` automatically (decision 11).
 
 ## Models
 
@@ -169,8 +173,8 @@ class TmxModel(BaseModel):
 ```
 
 Deliberate `BeforeValidator` functions perform the few conversions we mean to
-allow; nothing inherits Pydantic's loose coercion by accident. Error-cause
-configuration still needs to be added to the implemented base.
+allow; nothing inherits Pydantic's loose coercion by accident. The base
+enables `validation_error_cause=True` (GAPS decision 2).
 
 ### Shape and ordering
 
@@ -315,8 +319,9 @@ Validate both as language tags, with these policies:
   supplied, `lang` remains `None` and is omitted from XML.
 
 Warnings use `TmxWarning`, allowing callers to filter or escalate advisories.
-The existing encoding-name warning is the first implemented use; language
-advisories still need implementation.
+Implemented advisories: unknown encoding names, legacy `lang` without or
+differing from `xml_lang`, deprecated `<ut>` use, `<map>` without any of
+`code`/`ent`/`subst`, and the cross-variant `x` mismatch (decision 13).
 
 ## Prose-rule audit
 
@@ -600,20 +605,14 @@ Work create, then test, then document, per piece, with review between stages.
 Do not turn pending decisions or known gaps into passing tests that bless
 accidental current behavior.
 
-1. **Review the BCP 47 test slice.** Implementation and 529 passing cases are
-   in place; this is the current testing frontier.
-2. **Bring values into line with the decisions above.** Unsigned native
-   inputs, error causes, datetime input bounds/offsets/fractions, and separate
-   Python versus JSON serialization. Review the changes, then lock them down
-   with `test_validators.py`.
-3. **Bring model shape into line.** Explicit discriminators, TU grouping,
-   nonempty required children, consistent language values/advisories, and
-   assignment guarantees. Settle final field names, review, then test the
-   recursive models and their serialization contracts.
-4. **Audit the full TMX prose and design broader validation.** Decide scope
-   and public entry points, implement the required checks, then test them.
-   Recommendations and warning choices get their own review; the DTD alone
-   does not determine this work.
+1. **Review the BCP 47 test slice.** (Done; the API now says well-formed.)
+2. **Bring values into line with the decisions above.** (Done; GAPS 1-3
+   implemented, tested, and adversarially reviewed.)
+3. **Bring model shape into line.** (Done; GAPS 4/5/8 plus the decision-15
+   warnings, field names settled, tested and reviewed.)
+4. **Audit the full TMX prose and design broader validation.** (Done; the
+   audit ran as two independent passes and decisions 11-16 are recorded and
+   implemented.)
 5. **Build projection.** DTD resource loader, hardcoded plans, shared content
    interleave, and walkers. Resolve GAPS #9's XML/text boundary questions,
    verify recursive discriminated aliases on the real shapes, and add DTD
