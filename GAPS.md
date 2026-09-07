@@ -95,6 +95,13 @@ in both the model and JSON/XML output. Do not truncate to whole seconds. This
 supersedes the original plan's truncation policy; parsing remains bounded by
 `datetime.fromisoformat()` rather than promising arbitrary-precision timestamps.
 
+Offsets finer than whole minutes -- seconds and fractional seconds -- are
+accepted wherever `fromisoformat` accepts them and serialized back exactly
+(`±HHMM[SS[.ffffff]]`): output offsets are never rounded to whole seconds, and
+formatting must never land outside the parser's representable offset range. A
+`tzinfo` whose `utcoffset()` is `None` is behaviorally naive and is stamped UTC
+like any naive value.
+
 ## Models
 
 ### 4. Tagged input and union discrimination

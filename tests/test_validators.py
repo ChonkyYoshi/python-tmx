@@ -10,7 +10,7 @@ ISO 8601: the policy is deliberately bounded to that parser.
 """
 
 import warnings
-from datetime import UTC, date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta, timezone, tzinfo
 from typing import Any
 
 import pytest
@@ -172,8 +172,16 @@ def test_format_hex_integer_keeps_the_prefix_and_uppercases_digits(value: int, e
   assert format_hex_integer(value) == expected
 
 
-
-ACCEPTED_CODE_POINTS = ("#x0", "#xD7FF", "#xE000", "#xF8FF", "#x10FFFF", 0, 0x10FFFF, 0xE000)
+ACCEPTED_CODE_POINTS = (
+  ("#x0", 0),
+  ("#xD7FF", 0xD7FF),
+  ("#xE000", 0xE000),  # private use is a valid scalar value
+  ("#xF8FF", 0xF8FF),
+  ("#x10FFFF", 0x10FFFF),
+  (0, 0),
+  (0x10FFFF, 0x10FFFF),
+  (0xE000, 0xE000),
+)
 
 REJECTED_CODE_POINTS = (
   "#x110000",  # beyond the Unicode range
@@ -185,9 +193,8 @@ REJECTED_CODE_POINTS = (
 )
 
 
-@pytest.mark.parametrize("value", ACCEPTED_CODE_POINTS)
-def test_code_point_accepts_scalar_values_including_private_use(value: object) -> None:
-  expected = HEX_INTEGER.validate_python(value)
+@pytest.mark.parametrize(("value", "expected"), ACCEPTED_CODE_POINTS)
+def test_code_point_accepts_scalar_values_including_private_use(value: object, expected: int) -> None:
   assert CODE_POINT.validate_python(value) == expected
 
 
@@ -199,6 +206,10 @@ def test_code_point_rejects_non_scalar_values(value: object) -> None:
 
 OFFSET_P2 = timezone(timedelta(hours=2))
 OFFSET_M530 = timezone(timedelta(hours=-5, minutes=-30))
+OFFSET_P2S = timezone(timedelta(hours=2, seconds=30))
+OFFSET_FRACTIONAL = timezone(timedelta(hours=2, seconds=30, microseconds=500000))
+OFFSET_NEAR_24H = timezone(timedelta(hours=23, minutes=59, seconds=59, microseconds=999999))
+OFFSET_NEGATIVE_SUBSECOND = timezone(timedelta(microseconds=-500000))
 
 ACCEPTED_DATETIMES = (
   # Extended and basic forms, with and without an offset.
@@ -214,6 +225,11 @@ ACCEPTED_DATETIMES = (
   # Fractional seconds: preserved to microseconds, truncated beyond.
   ("2024-01-01T12:30:45.5", datetime(2024, 1, 1, 12, 30, 45, 500000, tzinfo=UTC)),
   ("2024-01-01T12:30:45.123456789+02:00", datetime(2024, 1, 1, 12, 30, 45, 123456, tzinfo=OFFSET_P2)),
+  # More of the fromisoformat repertoire, pinned so a stdlib change cannot
+  # silently move the boundary of the "bounded to fromisoformat" policy:
+  ("2024-01-01T12:30:45,5", datetime(2024, 1, 1, 12, 30, 45, 500000, tzinfo=UTC)),  # comma decimal
+  ("2024-W01-1T00:00", datetime(2024, 1, 1, 0, 0, tzinfo=UTC)),  # week date with time
+  ("2024-01-01T12:00:00+02:00:30", datetime(2024, 1, 1, 12, 0, 0, tzinfo=OFFSET_P2S)),  # offset seconds
 )
 
 
@@ -231,6 +247,28 @@ def test_parse_datetime_keeps_a_native_offset_untouched() -> None:
 def test_parse_datetime_stamps_a_native_naive_value_as_utc() -> None:
   native = datetime(2024, 1, 1, 12, 30, 45)
   assert parse_datetime(native) == native.replace(tzinfo=UTC)
+  assert DATETIME.validate_python(native) == native.replace(tzinfo=UTC)
+
+
+class NullOffsetTz(tzinfo):
+  """A pathological tzinfo whose utcoffset() is None: behaviorally naive."""
+
+  def utcoffset(self, dt: datetime | None) -> timedelta | None:
+    return None
+
+  def dst(self, dt: datetime | None) -> timedelta | None:
+    return None
+
+  def tzname(self, dt: datetime | None) -> str | None:
+    return None
+
+
+def test_parse_datetime_stamps_a_none_offset_tzinfo_as_utc() -> None:
+  # tzinfo is not None here, but the value has no effective timezone.
+  pathological = datetime(2024, 1, 1, 12, 30, 45, tzinfo=NullOffsetTz())
+  stamped = parse_datetime(pathological)
+  assert stamped == datetime(2024, 1, 1, 12, 30, 45, tzinfo=UTC)
+  assert parse_datetime(format_datetime(stamped)) == stamped
 
 
 def test_parse_datetime_keeps_native_microseconds() -> None:
@@ -278,6 +316,11 @@ EXPECTED_FORMATS = (
   (datetime(2024, 1, 1, 12, 30, 45, tzinfo=OFFSET_P2), "20240101T123045+0200"),  # offset kept
   (datetime(2024, 1, 1, 12, 30, 45, tzinfo=OFFSET_M530), "20240101T123045-0530"),
   (datetime(2024, 1, 1, 12, 30, 45, tzinfo=timezone(timedelta(hours=2, seconds=30))), "20240101T123045+020030"),
+  # Finer offsets are emitted losslessly: rounding could move the instant
+  # or land outside the representable range.
+  (datetime(2024, 1, 1, 12, 0, 0, tzinfo=OFFSET_FRACTIONAL), "20240101T120000+020030.500000"),
+  (datetime(2024, 1, 1, 12, 0, 0, tzinfo=OFFSET_NEAR_24H), "20240101T120000+235959.999999"),
+  (datetime(2024, 1, 1, 12, 0, 0, tzinfo=OFFSET_NEGATIVE_SUBSECOND), "20240101T120000-000000.500000"),
   (datetime(2024, 1, 1, 12, 30, 45, 500000, tzinfo=UTC), "20240101T123045.500000Z"),
   (datetime(2024, 1, 1, 12, 30, 45, 1), "20240101T123045.000001Z"),
   (datetime(999, 1, 1), "09990101T000000Z"),  # year zero-padded, not platform-dependent
@@ -297,7 +340,11 @@ def test_format_datetime_renders_the_basic_form_with_its_offset(value: datetime,
     datetime(2024, 1, 1, 12, 30, 45, tzinfo=OFFSET_P2),
     datetime(2024, 1, 1, 12, 30, 45, 500000, tzinfo=OFFSET_M530),
     datetime(999, 1, 1, 3, 4, 5, tzinfo=timezone(timedelta(hours=2))),
-    datetime(2024, 1, 1, 12, 30, 45, tzinfo=timezone(timedelta(hours=2, seconds=30))),
+    datetime(2024, 1, 1, 12, 30, 45, tzinfo=OFFSET_P2S),
+    # The offset region where rounding used to break reparseability.
+    datetime(2024, 1, 1, 12, 0, 0, tzinfo=OFFSET_FRACTIONAL),
+    datetime(2024, 1, 1, 12, 0, 0, tzinfo=OFFSET_NEAR_24H),
+    datetime(2024, 1, 1, 12, 0, 0, tzinfo=OFFSET_NEGATIVE_SUBSECOND),
   ],
 )
 def test_format_datetime_output_is_reparseable(value: datetime) -> None:
@@ -452,6 +499,8 @@ BAD_MODEL_INPUTS = (
   ("creation_date", date(2024, 1, 1)),
   ("creation_date", "2024-01-01"),
   ("creation_date", 20240101),
+  ("creation_date", time(12, 30)),
+  ("creation_date", True),
 )
 
 
@@ -489,6 +538,7 @@ def test_json_mode_dumps_use_the_string_formatters() -> None:
     "code_point": "#xE9",
     "creation_date": "20240101T123045.500000+0200",
   }
+  assert probe.model_dump_json() == '{"integer":"42","code_point":"#xE9","creation_date":"20240101T123045.500000+0200"}'
 
 
 def test_assignment_revalidates_the_field() -> None:
@@ -497,6 +547,8 @@ def test_assignment_revalidates_the_field() -> None:
   assert probe.integer == 7
   probe.creation_date = as_runtime_input("2024-01-01T12:30:45Z")
   assert probe.creation_date == datetime(2024, 1, 1, 12, 30, 45, tzinfo=UTC)
+  probe.creation_date = datetime(2024, 1, 1, 12, 30)  # native naive: stamped on assignment too
+  assert probe.creation_date == datetime(2024, 1, 1, 12, 30, tzinfo=UTC)
   with pytest.raises(ValidationError):
     probe.integer = -7
   with pytest.raises(ValidationError):

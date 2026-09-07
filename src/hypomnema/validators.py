@@ -102,7 +102,9 @@ def parse_datetime(value: object) -> datetime:
   objects are rejected as unsupported types.
 
   A naive value is assumed to be UTC and stamped with it; an explicit
-  offset is retained as-is, never converted. Fractional seconds are kept
+  offset is retained as-is, never converted. A ``tzinfo`` whose
+  ``utcoffset()`` is ``None`` is behaviorally naive and is stamped too.
+  Fractional seconds are kept
   to ``datetime``'s microsecond precision (``fromisoformat`` truncates
   beyond it, which is part of the bounded policy).
   """
@@ -121,7 +123,7 @@ def parse_datetime(value: object) -> datetime:
       raise ValueError(f"not an ISO 8601 date-time: {value!r}") from error
   else:
     raise ValueError(f"expected a datetime or an ISO 8601 date-time string, got {type(value).__name__!r}")
-  if parsed.tzinfo is None:
+  if parsed.utcoffset() is None:
     parsed = parsed.replace(tzinfo=UTC)
   return parsed
 
@@ -132,28 +134,35 @@ def format_datetime(value: datetime) -> str:
   Basic ISO 8601 ``YYYYMMDDTHHMMSS`` -- the form the spec recommends --
   with ``Z`` for a zero/absent offset (naive values are assumed UTC) and
   ``+HHMM``/``-HHMM`` otherwise, so an explicitly supplied offset survives
-  output instead of being normalized to UTC. An offset's seconds, which
-  ``fromisoformat`` can produce, are appended only when present. Fractional
-  seconds are emitted to ``datetime``'s precision, only when nonzero, as
-  in ``datetime.isoformat()``. Manual formatting for predictable year
-  zero-padding, which ``strftime``'s ``%Y`` does not guarantee.
+  output instead of being normalized to UTC. Finer offset components are
+  emitted losslessly when present -- seconds, then a fractional part --
+  because ``fromisoformat`` re-reads every form this emits; the offset is
+  never rounded, which could silently move the instant or land outside the
+  representable range (``±2359`` at the extreme). Fractional seconds of
+  the datetime itself are emitted to ``datetime``'s precision, only when
+  nonzero, as in ``datetime.isoformat()``. Manual formatting for
+  predictable year zero-padding, which ``strftime``'s ``%Y`` does not
+  guarantee.
   """
   offset = value.utcoffset()
   if offset is None or offset == timedelta(0):
     suffix = "Z"
   else:
-    seconds = round(offset.total_seconds())
-    sign = "+" if seconds >= 0 else "-"
-    hours, remainder = divmod(abs(seconds), 3600)
-    minutes, offset_seconds = divmod(remainder, 60)
+    sign = "+" if offset > timedelta(0) else "-"
+    magnitude = abs(offset)
+    hours, offset_remainder = divmod(magnitude, timedelta(hours=1))
+    minutes, offset_remainder = divmod(offset_remainder, timedelta(minutes=1))
+    offset_seconds, offset_fraction = divmod(offset_remainder, timedelta(seconds=1))
     suffix = f"{sign}{hours:02d}{minutes:02d}"
-    if offset_seconds:
+    if offset_seconds or offset_fraction:
       suffix += f"{offset_seconds:02d}"
-  fraction = f".{value.microsecond:06d}" if value.microsecond else ""
+    if offset_fraction:
+      suffix += f".{offset_fraction // timedelta(microseconds=1):06d}"
+  second_fraction = f".{value.microsecond:06d}" if value.microsecond else ""
   return (
     f"{value.year:04d}{value.month:02d}{value.day:02d}"
     f"T{value.hour:02d}{value.minute:02d}{value.second:02d}"
-    f"{fraction}{suffix}"
+    f"{second_fraction}{suffix}"
   )
 
 
