@@ -205,6 +205,21 @@ def test_ut_x_is_excluded_from_the_matching_set() -> None:
     validate_translation_unit(tu)
 
 
+def test_equal_x_values_across_different_element_kinds_match() -> None:
+  # The spec's cross-variant matching is by x value between bpt/it/ph/hi,
+  # not by element kind.
+  tu = unit(tuv("a", Bpt(i=1, x=1), Ept(i=1)), tuv("b", Ph(x=1)))
+  with warnings.catch_warnings():
+    warnings.simplefilter("error")
+    validate_translation_unit(tu)
+
+
+def test_a_variant_without_x_values_disagrees_with_one_with_them() -> None:
+  tu = unit(tuv("a", Bpt(i=1, x=5), Ept(i=1)), tuv("b", Bpt(i=1), Ept(i=1)))
+  with pytest.warns(TmxWarning, match="different inline x values"):
+    validate_translation_unit(tu)
+
+
 def test_x_inside_nested_content_counts() -> None:
   inner_sub = Sub(content=(Hi(x=7),))
   tu = unit(tuv("a", Bpt(i=1, content=(inner_sub,)), Ept(i=1)), tuv("b", Hi(x=7)))
@@ -223,20 +238,29 @@ def _random_valid_flow(rng: random.Random, depth: int, counter: Iterator[int]) -
   items: list[Any] = []
   for _ in range(rng.randint(0, 4)):
     kind = rng.random()
-    if kind < 0.35 or depth <= 0:
+    if kind < 0.25 or depth <= 0:
       items.append(f"text{rng.randint(0, 99)}")
-    elif kind < 0.55:  # adjacent pair whose bpt carries a sub flow
+    elif kind < 0.45:  # adjacent pair whose bpt carries sub flows
       i = next(counter)
-      sub_flow = _random_valid_flow(rng, depth - 1, itertools.count(1))
-      items.append(Bpt(i=i, content=(Sub(content=sub_flow),)))
-      items.append(Ept(i=i))
-    elif kind < 0.75:  # wrapping pair; the wrapped flow shares the namespace
+      sub_count = rng.randint(1, 2)
+      sub_flows = tuple(Sub(content=_random_valid_flow(rng, depth - 1, itertools.count(1))) for _ in range(sub_count))
+      items.append(Bpt(i=i, content=sub_flows))
+      items.append(Ept(i=i, content=sub_flows if rng.random() < 0.3 else ()))
+    elif kind < 0.65:  # wrapping pair; the wrapped flow shares the namespace
       i = next(counter)
       items.append(Bpt(i=i))
       items.extend(_random_valid_flow(rng, depth - 1, counter))
       items.append(Ept(i=i))
-    else:  # transparent highlight
+    elif kind < 0.8:  # transparent highlight
       items.append(Hi(content=_random_valid_flow(rng, depth - 1, counter)))
+    else:  # placeholder tag carrying its own sub flow
+      sub_flow = _random_valid_flow(rng, depth - 1, itertools.count(1))
+      if rng.random() < 0.5:
+        items.append(It(pos=rng.choice(["begin", "end"]), content=(Sub(content=sub_flow),)))
+      elif rng.random() < 0.5:
+        items.append(Ph(content=(Sub(content=sub_flow),)))
+      else:
+        items.append(Ut(content=(Sub(content=sub_flow),)))
   return tuple(items)
 
 
@@ -254,24 +278,31 @@ def as_generated(content: tuple[Any, ...]) -> Any:
   return content
 
 
-def _random_any_flow(rng: random.Random, depth: int, counter: Iterator[int]) -> tuple[Any, ...]:
+def _random_any_flow(rng: random.Random, depth: int) -> tuple[Any, ...]:
   """Like the valid generator but with independent random i values, so
   duplicates, orphans, and crossings occur naturally."""
   items: list[Any] = []
   for _ in range(rng.randint(0, 4)):
     kind = rng.random()
-    if kind < 0.35 or depth <= 0:
+    if kind < 0.3 or depth <= 0:
       items.append(f"text{rng.randint(0, 99)}")
-    elif kind < 0.6:
+    elif kind < 0.55:
       i = rng.randint(0, 4)
-      sub_flow = _random_any_flow(rng, depth - 1, itertools.count(1))
-      items.append(Bpt(i=i, content=(Sub(content=sub_flow),)))
+      sub_count = rng.randint(1, 2)
+      sub_flows = tuple(Sub(content=_random_any_flow(rng, depth - 1)) for _ in range(sub_count))
+      items.append(Bpt(i=i, content=sub_flows))
       if rng.random() < 0.8:
-        items.append(Ept(i=rng.randint(0, 4)))
-    elif kind < 0.8:
-      items.extend(_random_any_flow(rng, depth - 1, counter))
+        items.append(Ept(i=rng.randint(0, 4), content=sub_flows if rng.random() < 0.3 else ()))
+    elif kind < 0.7:
+      items.extend(_random_any_flow(rng, depth - 1))
+    elif kind < 0.85:
+      items.append(Hi(content=_random_any_flow(rng, depth - 1)))
     else:
-      items.append(Hi(content=_random_any_flow(rng, depth - 1, counter)))
+      sub_flow = _random_any_flow(rng, depth - 1)
+      if rng.random() < 0.5:
+        items.append(It(pos=rng.choice(["begin", "end"]), content=(Sub(content=sub_flow),)))
+      else:
+        items.append(Ut(content=(Sub(content=sub_flow),)))
   return tuple(items)
 
 
@@ -291,7 +322,7 @@ def test_fuzz_rejections_never_escape_validation_error() -> None:
   with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     for _ in range(500):
-      content = _random_any_flow(rng, depth=3, counter=itertools.count(1))
+      content = _random_any_flow(rng, depth=3)
       try:
         validate_translation_unit_variant(TranslationUnitVariant(xml_lang="en", content=as_generated(content)))
       except ValidationError:
@@ -318,8 +349,9 @@ def test_mutating_a_valid_tree_is_always_rejected() -> None:
         broken = content
       else:
         broken = _insert_after(content, victim, Bpt(i=victim.i))
-      with pytest.raises(ValidationError):
+      with pytest.raises(ValidationError) as excinfo:
         validate_translation_unit_variant(TranslationUnitVariant(xml_lang="en", content=as_generated(broken)))
+      assert all(error["type"] == "inline_tag_pairing" for error in excinfo.value.errors())
 
 
 def _iter_nodes(items: tuple[Any, ...]) -> Iterator[Any]:

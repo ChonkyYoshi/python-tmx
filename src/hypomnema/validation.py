@@ -57,21 +57,19 @@ def _walk_segment(
   items: tuple[SegContentItem, ...], loc: tuple[str | int, ...], errors: list[InitErrorDetails]
 ) -> None:
   """Walk one flow: fresh ``i`` namespaces, unmatched-bpt check at the end."""
-  bpt_locations: dict[int, tuple[str | int, ...]] = {}
+  bpt_locations: dict[int, tuple[tuple[str | int, ...], Bpt]] = {}
   ept_seen: set[int] = set()
   _walk_items(items, loc, errors, bpt_locations, ept_seen)
-  for i, bpt_loc in bpt_locations.items():
+  for i, (bpt_loc, bpt) in bpt_locations.items():
     if i not in ept_seen:
-      errors.append(
-        _pairing_error(bpt_loc, f"<bpt> i={i} has no subsequent corresponding <ept> within this flow", None)
-      )
+      errors.append(_pairing_error(bpt_loc, f"<bpt> i={i} has no subsequent corresponding <ept> within this flow", bpt))
 
 
 def _walk_items(
   items: tuple[SegContentItem, ...],
   loc: tuple[str | int, ...],
   errors: list[InitErrorDetails],
-  bpt_locations: dict[int, tuple[str | int, ...]],
+  bpt_locations: dict[int, tuple[tuple[str | int, ...], Bpt]],
   ept_seen: set[int],
 ) -> None:
   """Walk one flow's items in document order, sharing the flow's state.
@@ -90,7 +88,7 @@ def _walk_items(
           )
         )
       else:
-        bpt_locations[node.i] = (*loc, index)
+        bpt_locations[node.i] = ((*loc, index), node)
       _walk_sub_flows(node.content, child_loc, errors)
     elif isinstance(node, Ept):
       if node.i in ept_seen:
@@ -170,7 +168,9 @@ def validate_translation_unit(tu: TranslationUnit) -> None:
       _collect_x_values(node, values)
     x_sets.append(frozenset(values))
   if len(set(x_sets)) > 1:
+    all_values = sorted(set().union(*x_sets))
     warn(
-      "the variants of this <tu> use different inline x values; the x attribute matches inline tags between variants",
+      f"the variants of this <tu> use different inline x values {all_values};"
+      " the x attribute matches inline tags between variants",
       TmxWarning,
     )
