@@ -294,9 +294,9 @@ this work begins" hedges in decisions 6 and 7.
 
 **Decision:** cheap local constraints and cheap advisories run automatically
 through Pydantic validation and assignment. Expensive cross-node correctness
-checks are never automatic: they are public, explicit, model-scope validation
-functions the user invokes at their own runtime cost, and the writer always
-calls them before converting a model to XML -- successfully completed output
+checks are never automatic: they are public, explicit functions in the
+`validation` module that the user invokes at their own runtime cost, and the
+writer always calls them before converting a model to XML -- successfully completed output
 must be spec-compliant. Explicit check functions raise Pydantic
 `ValidationError` at the model level (consistent with decision 2); the writer
 wraps failures into `TmxSpecError` with context. Post-mutation revalidation

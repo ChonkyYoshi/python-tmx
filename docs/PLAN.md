@@ -144,6 +144,7 @@ src/hypomnema/
     content.py  the one implementation of text/child/tail interleave
     parse.py    element -> model walker
     build.py    model -> element walker
+  validation.py explicit cross-node checks (decision 11); writer calls them
   io.py         TmxReader, TmxWriter, HeaderPeek
   resources/
     tmx14.dtd
