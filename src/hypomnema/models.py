@@ -10,11 +10,16 @@ replaced by ``_``, otherwise verbatim -- ``o_tmf``, ``xml_lang``, and plain
 
 ``lang`` is the deprecated attribute; ``xml_lang`` is the standard one.
 The deprecated attribute still exists in TMX 1.4b and is modeled.
+
+The models own the structural constraints the DTD would check (required
+children, nonempty groups, legal group separation) and the cheap automatic
+advisories (GAPS decisions 5, 8, 11, 15). Expensive cross-node correctness
+checks are NOT here; they are explicit functions (decision 11).
 """
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
 from .validators import (
   TMXAsciiText,
@@ -29,6 +34,9 @@ from .validators import (
   TMXSegType,
   TMXSourceLanguage,
   TMXUnicodeCodePoint,
+  warn_deprecated_lang,
+  warn_deprecated_ut,
+  warn_map_without_target,
 )
 
 
@@ -44,14 +52,10 @@ def _as_tuple[T](value: list[T] | tuple[T, ...]) -> tuple[T, ...]:
 
 
 type ModelSequence[T] = Annotated[tuple[T, ...], BeforeValidator(_as_tuple)]
-
-
-# Union slots, named for the content shape they carry. Lazy PEP 695 aliases,
-# resolved on first use once every model below exists.
-type HeaderChild = Note | Property | Ude
-type TuChild = Note | Property | TranslationUnitVariant
-type TuvChild = Note | Property
-type SegContentItem = str | Bpt | Ept | Ph | It | Hi | Ut
+type HeaderChild = Annotated[Note | Property | Ude, Field(discriminator="element")]
+type MetadataChild = Annotated[Note | Property, Field(discriminator="element")]
+type InlineNode = Annotated[Bpt | Ept | Ph | It | Hi | Ut, Field(discriminator="element")]
+type SegContentItem = str | InlineNode
 type SubContentItem = str | Sub
 
 
@@ -72,6 +76,11 @@ class Note(TmxModel):
   lang: TMXLanguageTag | None = None
   text: str | None = None
 
+  @model_validator(mode="after")
+  def check_lang_advisories(self) -> Self:
+    warn_deprecated_lang(self.lang, self.xml_lang)
+    return self
+
 
 class Property(TmxModel):
   """``<prop>``: property name/value pair.
@@ -86,6 +95,11 @@ class Property(TmxModel):
   # Deprecated by TMX 1.3: use xml_lang.
   lang: TMXLanguageTag | None = None
   text: str | None = None
+
+  @model_validator(mode="after")
+  def check_lang_advisories(self) -> Self:
+    warn_deprecated_lang(self.lang, self.xml_lang)
+    return self
 
 
 class Map(TmxModel):
@@ -103,6 +117,11 @@ class Map(TmxModel):
   ent: TMXAsciiText | None = None
   subst: TMXAsciiText | None = None
 
+  @model_validator(mode="after")
+  def check_map_advisories(self) -> Self:
+    warn_map_without_target(self.code, self.ent, self.subst)
+    return self
+
 
 class Ude(TmxModel):
   """``<ude>``: user-defined encoding.
@@ -115,7 +134,7 @@ class Ude(TmxModel):
   element: Literal["ude"] = Field(default="ude", frozen=True)
   name: str
   base: TMXEncodingName | None = None
-  maps: ModelSequence[Map] = ()
+  maps: ModelSequence[Map] = Field(min_length=1)
 
 
 class Sub(TmxModel):
@@ -207,6 +226,11 @@ class Ut(TmxModel):
   x: TMXInteger | None = None
   content: ModelSequence[SubContentItem] = ()
 
+  @model_validator(mode="after")
+  def check_deprecation(self) -> Self:
+    warn_deprecated_ut()
+    return self
+
 
 class Header(TmxModel):
   """``<header>``: TMX file header.
@@ -228,15 +252,16 @@ class Header(TmxModel):
   creationid: str | None = None
   changedate: TMXDatetime | None = None
   changeid: str | None = None
-  items: ModelSequence[HeaderChild] = ()
+  metadata: ModelSequence[HeaderChild] = ()
 
 
 class TranslationUnitVariant(TmxModel):
   """``<tuv>``: one language variant inside a ``<tu>``.
 
-  DTD: ``<!ELEMENT tuv ((note|prop)*, seg)>``. There is no ``Segment``
-  model: ``<seg>`` has no attributes or identity, so its mixed inline
-  content is carried directly as this node's ``content``.
+  DTD: ``<!ELEMENT tuv ((note|prop)*, seg)>`` -- ``metadata`` (interleaved
+  notes and properties) stays separate from the segment ``content``. There
+  is no ``Segment`` model: ``<seg>`` has no attributes or identity, so its
+  mixed inline content is carried directly as this node's ``content``.
   """
 
   element: Literal["tuv"] = Field(default="tuv", frozen=True)
@@ -253,17 +278,24 @@ class TranslationUnitVariant(TmxModel):
   o_tmf: str | None = None
   changeid: str | None = None
   # Deprecated by TMX 1.3: use xml_lang.
-  lang: str | None = None
-  items: ModelSequence[TuvChild] = ()
+  lang: TMXLanguageTag | None = None
+  metadata: ModelSequence[MetadataChild] = ()
   content: ModelSequence[SegContentItem] = ()
+
+  @model_validator(mode="after")
+  def check_lang_advisories(self) -> Self:
+    warn_deprecated_lang(self.lang, self.xml_lang)
+    return self
 
 
 class TranslationUnit(TmxModel):
   """``<tu>``: one translation unit.
 
-  DTD: ``<!ELEMENT tu ((note|prop)*, tuv+)>`` -- interleaved children in
-  document order, at least one variant. No attributes are required; the
-  header supplies the defaults.
+  DTD: ``<!ELEMENT tu ((note|prop)*, tuv+)>`` -- the model keeps the two
+  groups separate: ``metadata`` (interleaved notes and properties, order
+  preserved) then ``variants`` (at least one). There is no legal
+  interleaving across the groups to preserve. No attributes are required;
+  the header supplies the defaults.
   """
 
   element: Literal["tu"] = Field(default="tu", frozen=True)
@@ -281,4 +313,5 @@ class TranslationUnit(TmxModel):
   changeid: str | None = None
   o_tmf: str | None = None
   srclang: TMXSourceLanguage | None = None
-  items: ModelSequence[TuChild] = ()
+  metadata: ModelSequence[MetadataChild] = ()
+  variants: ModelSequence[TranslationUnitVariant] = Field(min_length=1)

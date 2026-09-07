@@ -40,6 +40,34 @@ def warn_unknown_encoding(value: str) -> str:
   return value
 
 
+def warn_deprecated_lang(lang: str | None, xml_lang: str | None) -> None:
+  """Advisory checks for the deprecated ``lang`` attribute (GAPS #8).
+
+  Legacy ``lang`` without ``xml_lang`` is deprecated-but-correct: warn.
+  Both present but differing -- compared case-insensitively, since tags
+  are case-insensitive -- is suspicious: warn. One attribute is never
+  synthesized or normalized from the other.
+  """
+  if lang is None:
+    return
+  if xml_lang is None:
+    warnings.warn("the deprecated lang attribute is set without xml_lang; prefer xml:lang", TmxWarning)
+  elif lang.lower() != xml_lang.lower():
+    warnings.warn(f"lang {lang!r} and xml_lang {xml_lang!r} differ", TmxWarning)
+
+
+def warn_deprecated_ut() -> None:
+  """The ``<ut>`` element is deprecated (since TMX 1.3) but still legal."""
+  warnings.warn("the <ut> element is deprecated; prefer <bpt>, <ept>, <it>, or <ph>", TmxWarning)
+
+
+def warn_map_without_target(code: int | None, ent: str | None, subst: str | None) -> None:
+  """The spec recommends at least one of ``code``, ``ent``, ``subst`` on a
+  ``<map>`` -- a soft "should", so this warns instead of rejecting."""
+  if code is None and ent is None and subst is None:
+    warnings.warn("a <map> should specify at least one of code, ent, or subst", TmxWarning)
+
+
 type TMXEncodingName = Annotated[str, AfterValidator(warn_unknown_encoding)]
 
 

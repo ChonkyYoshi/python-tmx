@@ -182,7 +182,9 @@ configuration still needs to be added to the implemented base.
 - A translation unit has a metadata tuple and a separate **nonempty** variant
   tuple. Write metadata first, then variants, preserving each group's order.
   This matches `(note|prop)*, tuv+`; there is no legal interleaving across
-  those groups to preserve. Final field names for the split are not decided.
+  those groups to preserve. Settled field names: `metadata` and `variants` on
+  the unit, `metadata` and `content` on the variant, `metadata` on the header
+  (its one interleaved group).
 - A variant likewise keeps metadata separate from segment content, as the
   current model already does. There is no `Segment` model: `<seg>` has no
   attributes or identity and is written around the variant's content tuple.

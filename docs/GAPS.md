@@ -163,7 +163,9 @@ Separate a translation unit's metadata (`Note | Property`, interleaved in one tu
 from its variants (a separate nonempty tuple). Keep each group's order and write
 metadata before variants, as the DTD requires. Do not split notes from properties.
 Variants likewise keep metadata separate from segment content, as they already do.
-An empty segment remains legal. Final field names are not decided here.
+An empty segment remains legal. Settled field names: `metadata`/`variants`
+     on the translation unit, `metadata`/`content` on the variant, `metadata`
+     on the header.
 
 This promises structural correctness, not meaningful translations or completeness
 beyond what the TMX contract requires.
