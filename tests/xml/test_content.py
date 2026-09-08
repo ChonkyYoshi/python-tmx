@@ -8,8 +8,6 @@ the tree. The helpers are not TMX grammar validators, so foreign elements
 pass through untouched.
 """
 
-from collections.abc import Callable
-
 import pytest
 from lxml import etree
 
@@ -22,8 +20,6 @@ from hypomnema.xml.content import (
   write_mixed_content,
   write_text,
 )
-
-type ContentReader = Callable[[etree._Element], object]
 
 
 def bare_element(tag: str = "seg") -> etree._Element:
@@ -137,23 +133,26 @@ def test_unresolved_entity_is_rejected_by_the_plain_text_reader() -> None:
 # --- read nonmutation -------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-  "reader",
-  [lambda element: list(child_elements(element)), lambda element: list(read_mixed_content(element))],
-  ids=["child_elements", "read_mixed_content"],
-)
-def test_readers_do_not_mutate_the_tree(reader: ContentReader) -> None:
-  element = parsed("<seg>a<!--c-->b<bpt i='1'/>c</seg>")
+def test_child_elements_does_not_mutate_the_tree() -> None:
+  element = etree.fromstring("<seg>a<!--c-->b<bpt i='1'/>c</seg>")
   snapshot = etree.tostring(element)
-  reader(element)
+  list(child_elements(element))
+  assert etree.tostring(element) == snapshot
+
+
+def test_read_mixed_content_does_not_mutate_the_tree() -> None:
+  element = etree.fromstring("<seg>a<!--c-->b<bpt i='1'/>c</seg>")
+  snapshot = etree.tostring(element)
+  list(read_mixed_content(element))
   assert etree.tostring(element) == snapshot
 
 
 # --- write_text -------------------------------------------------------------
 
 
-def test_writing_none_sets_an_absent_text_slot() -> None:
+def test_writing_none_clears_existing_text() -> None:
   element = bare_element()
+  element.text = "previous text"
   write_text(element, None)
   assert element.text is None
 
@@ -161,7 +160,6 @@ def test_writing_none_sets_an_absent_text_slot() -> None:
 def test_writing_empty_string_sets_an_explicitly_empty_text_slot() -> None:
   element = bare_element()
   write_text(element, "")
-  assert element.text is not None
   assert element.text == ""
 
 

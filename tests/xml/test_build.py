@@ -13,6 +13,7 @@ errors are matched by substring, never frozen.
 
 import copy
 import warnings
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
@@ -39,6 +40,7 @@ from hypomnema.models import (
   Ude,
 )
 from hypomnema.xml.build import to_element
+from hypomnema.xml.names import XML_LANG
 
 OFFSET_PLUS_0230 = timezone(timedelta(hours=2, minutes=30))
 
@@ -61,6 +63,16 @@ def assert_same_tree(actual: etree._Element, expected: etree._Element) -> None:
 def as_runtime_input(value: object) -> Any:
   """A value ty must not static-check against the node union; its rejection is the behavior under test."""
   return value
+
+
+def spelled_attributes(element: etree._Element) -> dict[str, str]:
+  """The attribute dict with the xml namespace spelled back to ``xml:lang``."""
+  return {"xml:lang" if name == XML_LANG else name: value for name, value in element.attrib.items()}
+
+
+def attribute_by_spelled_name(element: etree._Element, xml_name: str) -> str | None:
+  """Read an attribute by its DTD spelling; ``xml:lang`` lives in the xml namespace."""
+  return element.get(XML_LANG if xml_name == "xml:lang" else xml_name)
 
 
 with warnings.catch_warnings():
@@ -207,23 +219,180 @@ def test_builds_expected_xml(model: TmxNode, expected_xml: str) -> None:
   assert_same_tree(to_element(model), etree.fromstring(expected_xml))
 
 
-def test_absent_attributes_and_text_are_omitted() -> None:
-  element = to_element(Ept(i=2))
-  assert element.get("x") is None
-  assert element.get("type") is None
-  assert element.text is None
-  note = to_element(Note())
-  assert dict(note.attrib) == {}
-  assert note.text is None
+def minimal_map() -> Map:
+  """A map with only its required attribute; a target-less map warns on construction."""
+  with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=TmxWarning)
+    return Map(unicode=0xE9)
 
 
-def test_none_text_and_empty_text_stay_distinct() -> None:
+def minimal_ude() -> Ude:
+  """A ude with the required at-least-one map group.
+
+  The target-less map warns on construction and again when the parent
+  revalidates it, so the advisory is muted around the whole construction.
+  """
+  with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=TmxWarning)
+    return Ude(name="u", maps=(minimal_map(),))
+
+
+def minimal_ut() -> Ut:
+  """A ut; its deprecation advisory always warns on construction."""
+  with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=TmxWarning)
+    return Ut()
+
+
+def minimal_header() -> Header:
+  """A header with exactly its seven required core attributes."""
+  return Header(
+    creationtool="ct",
+    creationtoolversion="1",
+    segtype="sentence",
+    o_tmf="g",
+    adminlang="en",
+    srclang="en",
+    datatype="txt",
+  )
+
+
+def minimal_tuv() -> TranslationUnitVariant:
+  """A tuv with its required xml:lang and an empty segment."""
+  return TranslationUnitVariant(xml_lang="en")
+
+
+def minimal_tu() -> TranslationUnit:
+  """A tu with the required at-least-one variant group."""
+  return TranslationUnit(variants=(minimal_tuv(),))
+
+
+type MinimalCase = tuple[str, Callable[[], TmxNode], dict[str, str], tuple[str, ...]]
+
+# Minimal valid example per node type: required native attributes and
+# required child groups populated, everything else left to default. Factories
+# (not instances) so each test builds a fresh model. The expected dict lists
+# exactly the attributes the DTD makes required; the tuple lists the model's
+# own optional attributes, each checked absent.
+MINIMAL_CASES: list[MinimalCase] = [
+  ("note", lambda: Note(), {}, ("o-encoding", "xml:lang", "lang")),
+  ("prop", lambda: Property(type="p"), {"type": "p"}, ("xml:lang", "o-encoding", "lang")),
+  ("map", minimal_map, {"unicode": "#xE9"}, ("code", "ent", "subst")),
+  ("ude", minimal_ude, {"name": "u"}, ("base",)),
+  ("bpt", lambda: Bpt(i=1), {"i": "1"}, ("x", "type")),
+  ("ept", lambda: Ept(i=1), {"i": "1"}, ()),
+  ("it", lambda: It(pos="begin"), {"pos": "begin"}, ("x", "type")),
+  ("ph", lambda: Ph(), {}, ("x", "assoc", "type")),
+  ("hi", lambda: Hi(), {}, ("x", "type")),
+  ("ut", minimal_ut, {}, ("x",)),
+  ("sub", lambda: Sub(), {}, ("datatype", "type")),
+  (
+    "header",
+    minimal_header,
+    {
+      "creationtool": "ct",
+      "creationtoolversion": "1",
+      "segtype": "sentence",
+      "o-tmf": "g",
+      "adminlang": "en",
+      "srclang": "en",
+      "datatype": "txt",
+    },
+    ("o-encoding", "creationdate", "creationid", "changedate", "changeid"),
+  ),
+  (
+    "tu",
+    minimal_tu,
+    {},
+    (
+      "tuid",
+      "o-encoding",
+      "datatype",
+      "usagecount",
+      "lastusagedate",
+      "creationtool",
+      "creationtoolversion",
+      "creationdate",
+      "creationid",
+      "changedate",
+      "segtype",
+      "changeid",
+      "o-tmf",
+      "srclang",
+    ),
+  ),
+  (
+    "tuv",
+    minimal_tuv,
+    {"xml:lang": "en"},
+    (
+      "o-encoding",
+      "datatype",
+      "usagecount",
+      "lastusagedate",
+      "creationtool",
+      "creationtoolversion",
+      "creationdate",
+      "creationid",
+      "changedate",
+      "o-tmf",
+      "changeid",
+      "lang",
+    ),
+  ),
+]
+
+
+@pytest.mark.parametrize(
+  ["build_model", "required_attributes", "optional_attributes"],
+  [case[1:] for case in MINIMAL_CASES],
+  ids=[case[0] for case in MINIMAL_CASES],
+)
+def test_absent_optional_attributes_are_omitted(
+  build_model: Callable[[], TmxNode], required_attributes: dict[str, str], optional_attributes: tuple[str, ...]
+) -> None:
+  # Exact dict equality: the required attributes present with their minimal
+  # values, and nothing else set. The per-name loop then names each optional
+  # attribute the model actually has and asserts it is None.
+  element = to_element(build_model())
+  assert spelled_attributes(element) == required_attributes
+  for attribute_name in optional_attributes:
+    assert attribute_by_spelled_name(element, attribute_name) is None
+
+
+@pytest.mark.parametrize("build_model", [case[1] for case in MINIMAL_CASES], ids=[case[0] for case in MINIMAL_CASES])
+def test_empty_content_does_not_invent_text(build_model: Callable[[], TmxNode]) -> None:
+  element = to_element(build_model())
+  # Include required descendants such as tuv/seg and ude/map, not just the
+  # structural root whose text slot is always absent.
+  assert all(child.text is None for child in element.iter())
+
+
+@pytest.mark.parametrize(
+  ["build_model", "expected_text"],
+  [
+    (lambda: Note(), None),
+    (lambda: Note(text=""), ""),
+    (lambda: Property(type="p"), None),
+    (lambda: Property(type="p", text=""), ""),
+  ],
+  ids=["note-none", "note-empty-string", "prop-none", "prop-empty-string"],
+)
+def test_none_text_and_empty_text_stay_distinct(build_model: Callable[[], TmxNode], expected_text: str | None) -> None:
   # Read back in memory: both spellings would parse to None, so the
-  # distinction is asserted on the built element's text slot itself.
-  assert to_element(Note()).text is None
-  assert to_element(Note(text="")).text == ""
-  assert to_element(Property(type="p")).text is None
-  assert to_element(Property(type="p", text="")).text == ""
+  # distinction is asserted on the built element's own text slot.
+  assert to_element(build_model()).text == expected_text
+
+
+@pytest.mark.parametrize(
+  ["content", "expected_seg_text"], [((), None), (("",), "")], ids=["no-content", "empty-string-content"]
+)
+def test_tuv_text_lives_exclusively_in_the_seg_slot(content: tuple[str, ...], expected_seg_text: str | None) -> None:
+  # <tuv> itself has no text slot: its content is the <seg> child's text,
+  # so the None-versus-empty distinction is read off <seg>, never off <tuv>.
+  element = to_element(TranslationUnitVariant(xml_lang="en", content=content))
+  assert element.text is None
+  assert element[0].text == expected_seg_text
 
 
 @pytest.mark.parametrize(

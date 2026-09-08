@@ -104,15 +104,24 @@ def test_nonconforming_map_is_rejected(xml: str) -> None:
 
 
 @pytest.mark.parametrize(
-  "xml, tag",
+  "xml, tag, fragment_line, offending_line",
   [
-    ("<tuv><seg>x</seg></tuv>", "tuv"),  # required xml:lang missing
-    ("<seg>text<bogus/></seg>", "seg"),  # undeclared child
+    ("<body>\n  <tu>\n    <tuv>\n      <seg>x</seg>\n    </tuv>\n  </tu>\n</body>", "tuv", 3, 3),
+    ('<tuv xml:lang="en">\n  <seg>\n    text\n    <bogus/>\n  </seg>\n</tuv>', "seg", 2, 4),
   ],
+  ids=["missing-required-attribute", "undeclared-descendant"],
 )
-def test_invalid_fragment_names_the_element_and_line(xml: str, tag: str) -> None:
-  with pytest.raises(TmxSpecError, match=f"<{tag}> at line 1"):
-    validate_fragment(etree.fromstring(xml))
+def test_invalid_fragment_names_the_element_and_line(
+  xml: str, tag: str, fragment_line: int, offending_line: int
+) -> None:
+  document = etree.fromstring(xml)
+  fragment = document.find(f".//{tag}")
+  assert fragment is not None
+  with pytest.raises(TmxSpecError, match=f"<{tag}> at line {fragment_line}:") as excinfo:
+    validate_fragment(fragment)
+  cause = excinfo.value.__cause__
+  assert isinstance(cause, etree.DocumentInvalid)
+  assert any(entry.line == offending_line for entry in cause.error_log)
 
 
 # --- validation scope excludes the surrounding tree --------------------------

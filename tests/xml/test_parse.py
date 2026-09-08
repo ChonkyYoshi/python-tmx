@@ -207,6 +207,7 @@ def test_header_metadata_preserves_interleaved_document_order() -> None:
   )
   assert isinstance(parsed, Header)
   assert [child.element for child in parsed.metadata] == ["note", "prop", "ude", "note"]
+  assert [child.text for child in parsed.metadata if isinstance(child, Note)] == ["n", "n2"]
 
 
 def test_tu_metadata_stays_separate_from_variants() -> None:
