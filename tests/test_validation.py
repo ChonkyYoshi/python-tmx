@@ -381,8 +381,8 @@ def _insert_after(items: tuple[Any, ...], after: Ept, node: Bpt) -> tuple[Any, .
     if isinstance(item, str):
       rebuilt.append(item)
       continue
-    rebuilt.append(item)
     if item is after:
+      rebuilt.append(item)
       rebuilt.append(node)
     else:
       rebuilt.append(
