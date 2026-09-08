@@ -4,9 +4,12 @@ Working review sheet, not a replacement for `PLAN.md` or a list of behavior to
 preserve just because the implementation currently does it. Edit the **Decision**
 lines directly. Decisions 1–5 and 8 are implemented and tested, as are the
 decision-11/12/13 explicit checks and the decision-15 warnings; decision 6 was
-resolved by the prose audit into decisions 11–16, and decision 7's writer-side
-half awaits the writer. Questions 9–10 are deferred to XML/I/O. The BCP 47
-grammar, value, model, and validation suites are implemented and reviewed.
+resolved by the prose audit into decisions 11–18. Decision 7's writer-side half
+awaits the writer. Question 9 is resolved for the projection layer (decision
+below); its writer half awaits the writer. Question 10 remains unresolved.
+The XML projection (decisions 17–18) is implemented, reviewed, and tested: the
+suite is 1088 tests, 225 of them XML (build 64, content 38, dtd 19, parse 58,
+contract 46), all clean under Ruff, `ty`, `pytest`, and `pytest -W error`.
 Observations retain the context of the initial review; a recorded decision is
 not a claim that the code already implements it beyond the suites named above.
 
@@ -211,14 +214,16 @@ still to be designed. Do not assume `model_validate(existing_model)` deeply
 revalidates existing instances: Pydantic trusts instances by default, so any such
 entry point must deliberately ensure the required validation actually runs.
 
-Two verified edge behaviors that follow from this policy: (a) per-assignment
-checks cannot see two-step cycles -- `h1.content = (h2,); h2.content = (h1,)`
-passes each local check and produces a model that fails serialization; cycle
-detection is a candidate for the decision-11 explicit checks and the writer
-boundary, and the hazard is documented for users. (b) `model_construct` and
-`model_copy(update=...)` bypass validation entirely and can embed invalid
-states; only a data round trip (`model_validate(model.model_dump())`) is a deep
-check today. Both are pinned by tests.
+Two edge behaviors that follow from this policy: (a) per-assignment checks
+cannot see two-step cycles -- `h1.content = (h2,); h2.content = (h1,)` passes
+each local check and produces a model that fails serialization; cycle detection
+is a candidate for the decision-11 explicit checks and the writer boundary, and
+the hazard is documented for users. The cycle outcome itself is not covered by
+a cycle-detection test, so calling it "pinned" would overstate it. (b)
+`model_construct` and `model_copy(update=...)` bypass validation entirely and
+can embed invalid states; only a data round trip
+(`model_validate(model.model_dump())`) is a deep check today. Only (b) is
+pinned by tests.
 
 The writer is the final conformance boundary: it must check applicable domain/prose
 rules as well as DTD structure before accepting data for output. Successfully
@@ -252,7 +257,7 @@ have changed the state. Do not normalize one attribute from the other.
 When only `xml_lang` is supplied, leave `lang` as `None` and omit that attribute
 from XML output.
 
-## XML boundary (defer until projection / I/O exists)
+## XML boundary
 
 ### 9. Semantic normalization and XML-representable text
 
@@ -267,7 +272,19 @@ semantically? At which boundary are XML-illegal text characters rejected, with w
 error? Tests must preserve significant whitespace while allowing only intentional
 normalizations. Do not equate a textual code-point attribute with literal XML text.
 
-**Decision:**
+**Decision:** `Note.text`/`Property.text` keep `None` and `""` distinct in the
+models and in in-memory lxml; on serialized XML both empty states parse back to
+`None`, and the future writer will spell every note/prop/seg with explicit
+start/end tags even when empty (writer not yet implemented). Mixed content
+preserves combined text, not chunk boundaries: adjacent and empty strings in a
+tuple collapse into whatever the serialized text reads back as. Structural
+formatting whitespace is discarded only after DTD validity has been
+established. Text inside note/prop/seg and inline text and tails are preserved
+exactly; comments and PIs are discarded but their tails are retained, and a
+tail belongs to the parent's content, never to the child model. `<map>` is
+EMPTY: even formatting whitespace inside it is invalid. XML-illegal literal
+text or attribute values raise `TmxSpecError` at projection time; the scalar
+`map unicode="#x0"` remains legal.
 
 ### 10. Input DOCTYPE and entity wording needs an executable contract
 
@@ -282,9 +299,19 @@ Then verify no external-resource access, no untrusted defaults changing the mode
 data, and the chosen entity behavior using hostile fixtures. Do not weaken parsing
 limits merely to make a fixture pass.
 
+**Update:** the package DTD now loads through `importlib.resources`, tested in a
+cold process independent of the working directory; wheel packaging is still
+pending (housekeeping below). A workaround is in place: lxml 6.1.3 attaches a
+synthetic `xmlns:xml` declaration when validating a fragment that is not its
+document's root, so `validate_fragment()` deep-copies such fragments into an
+independently owned tree for validation only and projects the untouched
+original. Whether an explicit `xmlns:xml` declaration is intrinsically illegal
+is deferred upstream -- do not assume it is. The entity-rejection helper tests
+exercise our error surface; they are not a parser-safety proof.
+
 **Decision:**
 
-## Prose-rule audit (decisions 11-16)
+## Prose-rule audit (decisions 11-18)
 
 Recorded after the completed spec-vs-DTD audit (independent spec-only pass in
 `spec_audit.md`, cross-reference against this sheet and the code in
@@ -312,12 +339,16 @@ so its inline elements pair within it and reuse of `i` across scopes is legal.
 elements join the enclosing flow's namespace (including a `<sub>` scope when
 nested there). Within one flow, in document order: every `bpt` must have a
 corresponding `ept` and every `ept` a corresponding `bpt` (an unmatched element
-of either kind is an error; the spec mandates the bpt direction, we add the
-ept direction for strictness), `i` values are unique among `bpt`s and among
+of either kind is an error), `i` values are unique among `bpt`s and among
 `ept`s, and each `ept` appears after its `bpt`. Matching is per-`i` with
 ordering, deliberately NOT stack nesting: the spec permits overlapping native
 code pairs. Enforced by the decision-11 explicit checks, plus DTD-independent
-agreement tests.
+agreement tests. Reaffirmed as written. The spec prose ("unique within given
+seg") is ambiguous: independent pairing with seg-wide `i` uniqueness is a
+plausible alternative reading, deliberately not selected. Treat this policy as
+our documented interpretation, not an unambiguous spec mandate; an earlier
+hedge here ("only the bpt direction is spec-mandated") overlooked the `ept`
+definition and was removed rather than resolved by changing behavior.
 
 ### 13. Cross-variant `x` correspondence is advisory
 
@@ -360,13 +391,45 @@ it. `attribute_defaults=False` makes absence observable, and the internal-subset
 verification from question 10 must confirm no hostile fixture can inject the
 attribute.
 
+### 17. Projection is direct, model-driven, and narrow
+
+**Decision:** the superseded "hardcoded per-model projection plans" approach
+(`xml/plans.py` remains an unused stub) was replaced by direct projection.
+`from_element()` runs the package DTD once over the fragment, then matches the
+element tag against the model classes and validates explicit attributes with
+`model_validate()`. `to_element()` accepts only `TmxNode` models and directly
+iterates native fields through shared formatters (hex for `Map.unicode`/`code`,
+datetime, integers). `TmxNode` is a closed union of the 14 node models under a
+separate `TmxModel` base; there are no standalone models for `tmx`/`body`/`seg`.
+Neither direction performs broader domain or whole-tree validation:
+`from_element()` checks the DTD plus per-model constraints only, and
+`to_element()` builds a detached element tree -- the caller owns domain checks
+and DTD validation of the output. Projection never pretty-prints; the future
+I/O layer pretty-prints element-only containers and never text-bearing
+content. Content is built eagerly per element (fixing recursion on deep valid
+250-`hi` trees); no guarantee is made for arbitrary depth or cyclic models.
+
+### 18. XML test structure: shared fixtures, local oracles, narrow warnings
+
+**Decision:** the XML suites share fresh construction scaffolding only
+(`minimal_node`, `minimal_header`, and `valid_tmx_document` fixtures in
+`tests/xml/conftest.py`); examples and oracles stay local to each test module.
+`TmxWarning` advisories are muted only where legitimately emitted, via explicit
+narrow `filterwarnings` marks, never globally.
+
 ## Housekeeping / verification later
 
 - The plan now reflects the existing `ruff.toml` settings: two-space indentation
   and 120-character lines. No formatter configuration was changed.
-- XML modules and `io.py` are placeholders; the error hierarchy only has
-  `TmxWarning`. These are unfinished work, not failing-test targets yet.
+- The error hierarchy has `TmxError`, `TmxSpecError`, and `TmxWarning`; `io.py`
+  and the reader/writer facade are placeholders, as are full-tree validation,
+  the decision-6 `Ude.base`/`code` rule, a cycles policy, and a hardened I/O
+  lifecycle. These are unfinished work, not failing-test targets.
 - Verify the DTD is included in a built wheel and loadable through package resources
-  outside the checkout. Its presence under `src/` is not proof of wheel inclusion.
+  outside the checkout. The tested cold-process, cwd-independent
+  `importlib.resources` load runs against the checkout, not a wheel.
+- The lxml attached-fragment `xmlns:xml` workaround (deep-copy for validation
+  only) is housekeeping, not policy; revisit if a fixed lxml changes the
+  behavior.
 - No coverage/property-testing dependency or CI configuration has been added.
   Explicit examples are the first slice; choose additional tooling when useful.

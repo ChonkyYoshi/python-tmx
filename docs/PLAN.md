@@ -6,16 +6,16 @@ streaming, lxml-only library with hardened parsing, structural validation
 against a bundled DTD, and Pydantic domain models.
 
 This document is a guidepost, not the TMX specification. It records the agreed
-direction and identifies what is still pending. Except for the current-state
-section, API examples and behavior below describe the target, not functionality
-that necessarily exists yet.
+direction and identifies what is still pending. Implementation status is
+called out explicitly; the reader/writer APIs below remain targets until
+built.
 
 Sources of truth:
 
 - [TMX 1.4b specification](Spec-TMX-1.4b.md), converted
   from the official GALA publication: value semantics, prose requirements,
   recommendations, and examples. The DTD is not a substitute for this text.
-- [Bundled DTD](src/hypomnema/resources/tmx14.dtd): element/attribute inventory
+- [Bundled DTD](../src/hypomnema/resources/tmx14.dtd): element/attribute inventory
   and XML content models. Do not duplicate that inventory in this plan.
 - [RFC 5646](https://www.rfc-editor.org/rfc/rfc5646.html), sections 2.1 and
   2.2.9: language-tag grammar and well-formedness versus validity.
@@ -46,18 +46,36 @@ Sources of truth:
   uniqueness, and the x advisory -- with fuzz-tested acceptance and
   rejection (`tests/test_validation.py`). Both survived dedicated
   adversarial reviews.
-- **XML/I/O are not implemented.** `io.py`, the modules in `xml/`, and the
-  public facade in `__init__.py` are placeholders. `errors.py` currently
-  defines only `TmxWarning`; whole-tree validation, DTD loading, and the
-  readers/writers remain.
-- **Testing infrastructure is minimal.** `pytest.toml` discovers `tests/`,
-  uses importlib import mode, and enables strict configuration/marker checks.
-  The grammar (529), value (220), model (84), and validation (30) suites
-  exist; XML and I/O suites do not. No coverage or property-testing
-  dependencies or CI configuration have been added.
-- **Resources are present in the checkout.** DTD inclusion in a built wheel
-  and loading through package resources outside the checkout still need
-  verification. The README/facade have not been brought up to date for v2.
+- **XML projection is implemented, reviewed, and tested for all 14 node
+  models.** Parsing uses direct tag dispatch and explicit attribute mapping;
+  building uses explicit content dispatch plus native model-field iteration
+  and the shared value formatters. A plan-interpreter prototype was built,
+  compared against this simpler shape, and superseded; `xml/plans.py` is an
+  unused placeholder. `TmxNode` is the closed 14-model union typing projection;
+  `TmxModel` remains the shared base. Text/tail handling, plain-text slots,
+  recursive content, metadata ordering, hex values, and the `<seg>` wrapper
+  are covered.
+- **Projection is not the final conformance boundary.** `from_element()` runs
+  fragment DTD validation plus local model validation only; broader domain
+  checks are not invoked. `to_element()` builds a detached tree; its caller
+  owns whole-tree/domain revalidation and output DTD validation. The
+  `Ude.base`/`Map.code` requirement and mutation/cycle handling still await
+  implementation or an explicit boundary decision.
+- **I/O and the public facade remain placeholders.** `io.py` and the package
+  `__init__.py` are unfinished. `TmxError`, `TmxSpecError`, and `TmxWarning`
+  exist; the parse/state errors and readers/writers do not.
+- **Verification is green: 1,088 tests.** Grammar (529), value (220), model
+  (84), and validation (30) cases are joined by 225 XML cases: build 64,
+  content 38, DTD 19, parse 58, projection contract 46. Ruff and ty pass, as
+  does the XML suite with warnings escalated to errors. Tests were reviewed
+  and harmonized: shared fresh construction fixtures, independent
+  module-local expectations, narrow explicit warning marks, no autouse
+  suppression. No coverage/property-testing dependencies or CI exist.
+- **Package-resource loading is implemented and tested.** A cold subprocess
+  loads and validates with the bundled DTD from an unrelated working
+  directory. Attached-fragment validation carries a tested lxml namespace
+  workaround; upstream investigation is deferred. Wheel inclusion and loading
+  outside the checkout are still unverified. The README remains out of date.
 
 ## Hard constraints
 
@@ -100,9 +118,10 @@ Sources of truth:
 
 ## Strictness has three layers
 
-Keep validation out of the projection machinery: plans describe XML mapping,
-not a second schema language. Some overlap between models and the DTD is
-intentional; independence is useful when it catches drift.
+Keep schema rules out of XML assembly and text/tail handling. Projection
+invokes the relevant independent layers rather than becoming a second schema
+language. Some overlap between models and the DTD is intentional; independence
+is useful when it catches drift.
 
 1. **XML safety and well-formedness:** a hardened lxml parser configuration.
    Malformed XML is `TmxParseError`. Untrusted input declarations must not
@@ -116,11 +135,12 @@ intentional; independence is useful when it catches drift.
    rather than letting callers construct arbitrary child orderings.
 3. **Domain and prose rules:** Pydantic validators own values such as
    datetimes, integers, language tags, and prose enums such as `assoc`.
-   Broader validators handle relationships such as `<ude base>` being
-   required when a child `<map>` carries `code`. These checks must be
-   available to callers and invoked by the writer; strict reading must also
-   enforce the applicable rules on consumed data. Their exact API and scope
-   will be settled during the prose audit.
+   Broader validation must handle relationships such as `<ude base>` being
+   required when a child `<map>` carries `code`. Per-flow pairing and the
+   cross-variant `x` advisory already have explicit APIs; the remaining
+   whole-tree checks do not. The writer must call applicable checks, and
+   strict reading must enforce them on consumed data. Neither projection
+   direction alone currently provides that complete guarantee.
 
 Namespaces: TMX 1.4b is namespace-free, so strict input is too. Foreign
 namespaces are not matched by local name, since that would let another
@@ -143,11 +163,11 @@ src/hypomnema/
   validators.py enums, Annotated value aliases, parse/format functions
   models.py     all Pydantic TMX models (recursive family, one module)
   xml/
-    dtd.py      loads and caches the bundled DTD
-    plans.py    hardcoded per-model projection plans
-    content.py  the one implementation of text/child/tail interleave
-    parse.py    element -> model walker
-    build.py    model -> element walker
+    dtd.py      loads and caches the bundled DTD; validates single fragments
+    names.py    shared XML namespace and expanded xml:lang name
+    content.py  plain text and the one text/child/tail interleave implementation
+    parse.py    explicit element -> model dispatch with DTD-checked structure
+    build.py    explicit model -> element dispatch, native attribute iteration
   validation.py explicit cross-node checks (decision 11); writer calls them
   io.py         TmxReader, TmxWriter, HeaderPeek
   resources/
@@ -160,12 +180,13 @@ package; only the DTD ships as a resource.
 
 Dependencies point one way: errors and the independent BCP 47 module, then
 validators, then models, then validation, then XML, then I/O. `models.py`
-never imports lxml or validation; the writer is the only component that
-calls `validation` automatically (decision 11).
+never imports lxml or validation. Models and projection do not automatically
+invoke broader checks; the future reader/writer must invoke the applicable
+checks at their own conformance boundaries.
 
 ## Models
 
-The target shared base configuration is:
+The implemented shared base configuration is:
 
 ```python
 class TmxModel(BaseModel):
@@ -224,9 +245,8 @@ do not have to repeat the tag. The same applies to direct
 `Hi.model_validate(...)` and already-typed instances in content sequences.
 
 At a slot choosing between multiple model types, dictionaries/JSON must
-supply `element`. Configure **explicit discriminated unions**; reject missing
-or unknown tags rather than guessing from field shape. The current ordinary
-unions have overlapping shapes and need this change.
+supply `element`. Implemented **explicit discriminated unions** reject missing
+or unknown tags rather than guessing from overlapping field shapes.
 
 Mixed content remains ordinary strings plus a tagged model-only union:
 
@@ -243,6 +263,11 @@ Tagged JSON preserves modeled node identity, so a dumped `<hi>` cannot
 revalidate as `<ph>`. It is a model representation, not an XML preservation
 format. Normal dumps include the tag; deliberately omitting defaulted fields
 can remove it and is not the complete round-trip representation.
+
+`TmxNode` is a separate, plain union of the 14 concrete node models. It types
+projection inputs and outputs; it neither replaces the content discriminators
+nor includes the bare `TmxModel` base. There are no standalone domain models
+for `tmx`, `body`, or `seg`.
 
 ### Assignment and whole-tree validation
 
@@ -263,8 +288,8 @@ with its implementation and instance-handling policy verified by tests.
 - **Datetimes:** accept native `datetime` values and date-time strings
   representable and parseable by `datetime.fromisoformat()`. Require both
   date and time, rejecting date-only strings even though that parser accepts
-  them. Do not impose the current code's narrower `T`/`t` separator requirement;
-  date-time syntax follows `fromisoformat()`. Reject standalone `date`/`time`
+  them. There is no additional `T`/`t` separator restriction; date-time syntax
+  follows `fromisoformat()`. Reject standalone `date`/`time`
   objects, unrelated strings, and other input types. This is a deliberately
   bounded Python datetime policy, not a claim to implement all ISO 8601 forms.
 - **Datetime preservation:** assume UTC when no timezone is provided.
@@ -273,8 +298,9 @@ with its implementation and instance-handling policy verified by tests.
   `datetime`'s microsecond precision, with no truncation to whole seconds.
   Exact lexical spelling, arbitrary sub-microsecond precision, and a named
   timezone's Python identity in serialized text are not promised. The
-  spec's basic UTC timestamp pattern is a recommendation, not our required
-  output form; final lexical formatting is to be settled in implementation.
+  spec's basic UTC timestamp pattern is a recommendation. The shared formatter
+  emits `YYYYMMDDTHHMMSS[.ffffff]Z` for zero offsets and retains other offsets
+  as `±HHMM[SS[.ffffff]]`, including fractional offset seconds.
 - **Decimal integers:** attributes treated as numbers must be unsigned
   integers. Reject negative native integers, booleans, and floats as well as
   signed, whitespace-padded, non-ASCII, or underscore-containing strings.
@@ -357,42 +383,54 @@ typo, the undocumented deprecated `lang`, `version` required-vs-`#FIXED`) and
 the seg-whitespace rule applies to `<seg>` only, not `<hi>`/`<sub>` -- see
 `crossreference.md` section 5.
 
-## Projection: hardcoded plans
+## Projection: direct dispatch
 
-TMX 1.4b is frozen, so the model-to-XML mapping is data, not something to
-derive. `xml/plans.py` hardcodes one immutable plan per model: the element
-name, ordered attribute rows, and the content shape (plain text, ordered
-child groups with tag dispatch maps, mixed inline content, or wrapped mixed
-content like `<seg>`). The mechanical naming rule makes attribute field
-names computable, so an attribute row is little more than the XML attribute
-name and a formatter.
+The model-to-XML mapping was first built as data-driven plans executed by
+generic walkers, then rebuilt as direct dispatch after comparing both shapes
+on a working slice. Plans moved mapping decisions into data without removing
+them, and the interesting TMX shapes -- interleaved metadata, separated
+variant groups, the `<seg>` wrapper, two inline grammars -- needed plan
+vocabulary growth that read worse than explicit code. `xml/plans.py` remains
+only as an unused placeholder.
 
-There is deliberately no marker system and no introspection-based plan
-compiler. A compiler for one program that never changes is generic machinery
-with a single client. The safeguard replacing it is testing built from the
-DTD itself: tests parse the bundled DTD and assert that plans, models, and
-DTD agree in both directions. Every declared attribute and content slot is
-covered, and nothing is covered that is not declared, accounting explicitly
-for wrappers such as `<seg>`. Drift fails a named test, not a customer file.
+Parsing (`parse.py`) dispatches on the element tag and maps every attribute
+explicitly to its model field, ending in `model_validate` so XML's string
+attributes flow through the settled value aliases. `ValidationError` becomes
+`TmxSpecError` with element and line context. The DTD validates the fragment
+once before projection; recursion then works on DTD-checked structure.
+`tmx`, `body`, and `seg` have no standalone domain models and are rejected
+with a clear message.
 
-Two generic walkers execute plans. `from_element` goes element to model,
-ends in `model_validate`, and surfaces `ValidationError` as `TmxSpecError`
-with element and line context. Strict consumption also invokes applicable
-broader domain checks. `to_element` goes model to element for the writer,
-which performs domain checks and DTD-validates the output before committing
-bytes. Plans map fields to XML mechanics; they do not own validation rules.
-Models encode required structure and groups, while the DTD independently
-checks the resulting order, cardinality, and attributes.
+Building (`build.py`) dispatches on the model type, writes attributes by
+iterating the model's native fields (excluding the discriminator and explicit
+child slots), and formats values with the shared per-type formatters,
+including hexadecimal `Map` values. Content handling is explicit per shape:
+plain text, ordered metadata/variant groups, the `<seg>` wrapper, and mixed
+inline content.
 
 `content.py` is the only code that touches lxml's text/tail mechanics, in
 both directions. Earlier experiments exposed how easily sharing incorrect
 interleave logic can make round-trip checks pass vacuously.
 
-Text normalization at this boundary is still open (GAPS #9): `None` versus
-empty text, adjacent/empty strings in mixed content, semantic round-trip
-equality, and the rejection boundary for XML-illegal characters. Do not
-settle these by quietly stripping whitespace or equating literal XML text
-with a textual `map unicode="#x..."` attribute.
+Text boundary (GAPS #9, settled for projection): models and in-memory lxml
+trees preserve `None` versus explicitly empty text; serialized XML does not
+-- both empty spellings parse back as `None`, and the future writer will emit
+explicit start/end tags even for empty elements. Mixed content preserves
+combined text, not string chunk boundaries. Structural formatting between
+children is discarded only after DTD validation; `note`/`prop`/`seg` text and
+inline tails are kept exactly; comments and PIs are dropped with their tails
+retained. XML-illegal literal text or attribute values raise `TmxSpecError`
+at the boundary; a scalar `map unicode="#x0"` remains legal.
+
+Projection never pretty-prints. Future I/O may indent element-only containers
+(`tmx`, `header`, `body`, `tu`, `tuv`, `ude`) but must never touch
+text-bearing content.
+
+The completeness safeguard is DTD-driven testing: tests parse the bundled DTD
+and assert that models and both projection directions agree with it in both
+directions -- every declared attribute exercised with distinct values,
+nothing covered that is not declared, wrappers accounted for explicitly.
+Drift fails a named test, not a customer file.
 
 ## Parser security
 
@@ -584,8 +622,8 @@ verified performance of the current placeholders:
 
 - XML backend abstraction: one client, pure overhead.
 - `model_dump()`-based XML output: adds an unnecessary intermediate form.
-- Introspection-based projection compiler: replaced by hardcoded plans plus
-  DTD-derived agreement tests.
+- Introspection-based projection compiler, and then data-driven plans: both
+  superseded by direct dispatch plus DTD-derived agreement tests.
 - Separate note/prop lists: reorders valid documents. Separating a TU's
   metadata from its variants is different and matches the DTD's groups.
 - One universal inline union: accepts DTD-illegal nesting.
@@ -613,10 +651,11 @@ accidental current behavior.
 4. **Audit the full TMX prose and design broader validation.** (Done; the
    audit ran as two independent passes and decisions 11-16 are recorded and
    implemented.)
-5. **Build projection.** DTD resource loader, hardcoded plans, shared content
-   interleave, and walkers. Resolve GAPS #9's XML/text boundary questions,
-   verify recursive discriminated aliases on the real shapes, and add DTD
-   agreement and independent-oracle tests after review.
+5. **Build projection.** (Done; DTD loader with cold-load and attached-
+   fragment coverage, direct dispatch in both directions, shared content
+   interleave, GAPS #9's text boundary settled, DTD-driven agreement tests,
+   and the deep-recursion regression. The `Ude.base` requirement and broader
+   whole-tree checks remain decision-11 work, not projection gaps.)
 6. **Build reader and writer.** Reapply the earlier XML spike conclusions
    (lifecycle, buffering, DTD cost), resolve
    GAPS #10's internal-subset/entity policy, and verify hardened parsing,
