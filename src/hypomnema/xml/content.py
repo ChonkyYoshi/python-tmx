@@ -46,6 +46,24 @@ def read_mixed_content(element: etree._Element) -> Iterator[XmlContentItem]:
     yield "".join(text_parts)
 
 
+def read_text(element: etree._Element) -> str | None:
+  """Read plain text, preserving None versus an explicitly empty XML slot."""
+  parts: list[str] = []
+  for item in read_mixed_content(element):
+    if not isinstance(item, str):
+      raise TmxSpecError(f"expected text only inside <{element.tag}> at line {element.sourceline}")
+    parts.append(item)
+  return "".join(parts) if parts else None
+
+
+def write_text(element: etree._Element, text: str | None) -> None:
+  """Set a plain-text node without collapsing None and empty string."""
+  try:
+    element.text = text
+  except ValueError as error:
+    raise TmxSpecError(f"XML-illegal text inside <{element.tag}>: {error}") from error
+
+
 def write_mixed_content(element: etree._Element, items: Iterable[XmlContentItem]) -> None:
   """Populate a fresh element, folding consecutive strings into XML slots."""
   previous_child: etree._Element | None = None

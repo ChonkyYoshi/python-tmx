@@ -1,13 +1,29 @@
-"""Direct model-to-element projection for the first tuv/ph slice."""
+"""Direct model-to-element projection for all TMX node models."""
 
 from datetime import datetime
 
 from lxml import etree
 
 from ..errors import TmxSpecError
-from ..models import Ph, TmxModel, TranslationUnitVariant
-from ..validators import format_datetime, format_integer
-from .content import write_mixed_content
+from ..models import (
+  Bpt,
+  Ept,
+  Header,
+  Hi,
+  It,
+  Map,
+  Note,
+  Ph,
+  Property,
+  Sub,
+  TmxModel,
+  TranslationUnit,
+  TranslationUnitVariant,
+  Ude,
+  Ut,
+)
+from ..validators import format_datetime, format_hex_integer, format_integer
+from .content import write_mixed_content, write_text
 from .names import XML_LANG
 
 
@@ -15,32 +31,56 @@ def to_element(model: TmxModel) -> etree._Element:
   """Build a detached element, without indentation or model_dump().
 
   This is projection, not whole-tree revalidation. The caller owns domain
-  checks and DTD validation of the result. Unsupported nodes/metadata fail
-  explicitly. Expanded empty-tag spelling belongs to the future writer.
+  checks and DTD validation of the result. Document wrappers and expanded
+  empty-tag spelling belong to the future writer.
   """
+  if not isinstance(
+    model,
+    Header
+    | TranslationUnit
+    | TranslationUnitVariant
+    | Note
+    | Property
+    | Ude
+    | Map
+    | Bpt
+    | Ept
+    | It
+    | Ph
+    | Hi
+    | Ut
+    | Sub,
+  ):
+    raise TypeError(f"{type(model).__name__} is not a TMX node model")
+  element = etree.Element(model.element)
+  _write_attributes(element, model)
+
   match model:
+    case Note() | Property():
+      write_text(element, model.text)
+    case Header():
+      element.extend(to_element(child) for child in model.metadata)
+    case TranslationUnit():
+      element.extend(to_element(child) for child in model.metadata)
+      element.extend(to_element(variant) for variant in model.variants)
     case TranslationUnitVariant():
-      if model.metadata:
-        raise NotImplementedError("variant metadata projection is not implemented yet")
-      element = etree.Element(model.element)
-      _write_attributes(element, model)
+      element.extend(to_element(child) for child in model.metadata)
       segment = etree.SubElement(element, "seg")
       _build_content(segment, model.content)
-      return element
-    case Ph():
-      element = etree.Element(model.element)
-      _write_attributes(element, model)
+    case Ude():
+      element.extend(to_element(mapping) for mapping in model.maps)
+    case Map():
+      pass  # EMPTY: attributes only, not even formatting whitespace.
+    case Bpt() | Ept() | It() | Ph() | Hi() | Ut() | Sub():
       _build_content(element, model.content)
-      return element
-    case _:
-      raise NotImplementedError(f"projection of {type(model).__name__} is not implemented yet")
+  return element
 
 
 def _write_attributes(element: etree._Element, model: TmxModel) -> None:
-  """Walk native fields, excluding the discriminator and explicit child slots."""
+  """Walk native fields, excluding the discriminator and explicit content slots."""
   field_value: object
   for field_name, field_value in model:
-    if field_name in {"element", "metadata", "content"} or field_value is None:
+    if field_name in {"element", "metadata", "content", "text", "maps", "variants"} or field_value is None:
       continue
 
     match field_value:
@@ -48,6 +88,8 @@ def _write_attributes(element: etree._Element, model: TmxModel) -> None:
         formatted = field_value
       case datetime():
         formatted = format_datetime(field_value)
+      case int() if isinstance(model, Map) and field_name in {"unicode", "code"}:
+        formatted = format_hex_integer(field_value)
       case int():
         formatted = format_integer(field_value)
       case _:
