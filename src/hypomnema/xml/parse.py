@@ -11,6 +11,7 @@ from ..errors import TmxSpecError
 from ..models import Ph, TmxModel, TranslationUnitVariant
 from .content import child_elements, read_mixed_content
 from .dtd import validate_fragment
+from .names import XML_LANG
 
 
 def from_element(element: etree._Element) -> TmxModel:
@@ -35,7 +36,7 @@ def _from_element(element: etree._Element) -> TmxModel:
         # The DTD has already checked seg presence, attributes and cardinality.
         return TranslationUnitVariant.model_validate(
           {
-            "xml_lang": element.get("{http://www.w3.org/XML/1998/namespace}lang"),
+            "xml_lang": element.get(XML_LANG),
             "o_encoding": element.get("o-encoding"),
             "datatype": element.get("datatype"),
             "usagecount": element.get("usagecount"),

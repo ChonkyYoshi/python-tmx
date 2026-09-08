@@ -53,11 +53,9 @@ def write_mixed_content(element: etree._Element, items: Iterable[XmlContentItem]
     if isinstance(item, str):
       try:
         if previous_child is None:
-          existing = element.text
-          element.text = item if existing is None else existing + item
+          element.text = item if element.text is None else element.text + item
         else:
-          existing = previous_child.tail
-          previous_child.tail = item if existing is None else existing + item
+          previous_child.tail = item if previous_child.tail is None else previous_child.tail + item
       except ValueError as error:
         raise TmxSpecError(f"XML-illegal text inside <{element.tag}>: {error}") from error
     else:

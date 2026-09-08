@@ -8,6 +8,7 @@ from ..errors import TmxSpecError
 from ..models import Ph, TmxModel, TranslationUnitVariant
 from ..validators import format_datetime, format_integer
 from .content import write_mixed_content
+from .names import XML_LANG
 
 
 def to_element(model: TmxModel) -> etree._Element:
@@ -21,13 +22,13 @@ def to_element(model: TmxModel) -> etree._Element:
     case TranslationUnitVariant():
       if model.metadata:
         raise NotImplementedError("variant metadata projection is not implemented yet")
-      element = etree.Element("tuv")
+      element = etree.Element(model.element)
       _write_attributes(element, model)
       segment = etree.SubElement(element, "seg")
       _build_content(segment, model.content)
       return element
     case Ph():
-      element = etree.Element("ph")
+      element = etree.Element(model.element)
       _write_attributes(element, model)
       _build_content(element, model.content)
       return element
@@ -35,30 +36,24 @@ def to_element(model: TmxModel) -> etree._Element:
       raise NotImplementedError(f"projection of {type(model).__name__} is not implemented yet")
 
 
-def _write_attributes(element: etree._Element, model: Ph | TranslationUnitVariant) -> None:
+def _write_attributes(element: etree._Element, model: TmxModel) -> None:
   """Walk native fields, excluding the discriminator and explicit child slots."""
-  for field_name in type(model).model_fields:
-    if field_name in {"element", "metadata", "content"}:
-      continue
-    value: object = getattr(model, field_name)
-    if value is None:
+  field_value: object
+  for field_name, field_value in model:
+    if field_name in {"element", "metadata", "content"} or field_value is None:
       continue
 
-    match value:
+    match field_value:
       case str():
-        formatted = value
+        formatted = field_value
       case datetime():
-        formatted = format_datetime(value)
+        formatted = format_datetime(field_value)
       case int():
-        formatted = format_integer(value)
+        formatted = format_integer(field_value)
       case _:
         raise TypeError(f"unsupported attribute value for {type(model).__name__}.{field_name}")
 
-    xml_name = (
-      f"{{http://www.w3.org/XML/1998/namespace}}{field_name[4:]}"
-      if field_name.startswith("xml_")
-      else field_name.replace("_", "-")
-    )
+    xml_name = XML_LANG if field_name == "xml_lang" else field_name.replace("_", "-")
     try:
       element.set(xml_name, formatted)
     except ValueError as error:
