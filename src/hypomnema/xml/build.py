@@ -103,4 +103,7 @@ def _write_attributes(element: etree._Element, model: TmxModel) -> None:
 
 
 def _build_content(element: etree._Element, items: tuple[str | TmxModel, ...]) -> None:
-  write_mixed_content(element, (item if isinstance(item, str) else to_element(item) for item in items))
+  # Finish recursion before interleaving, so each ancestor does not keep
+  # write_mixed_content's frame on the stack while building its descendants.
+  projected_items = tuple(item if isinstance(item, str) else to_element(item) for item in items)
+  write_mixed_content(element, projected_items)
