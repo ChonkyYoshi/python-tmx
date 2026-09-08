@@ -17,6 +17,7 @@ from ..models import (
   Property,
   Sub,
   TmxModel,
+  TmxNode,
   TranslationUnit,
   TranslationUnitVariant,
   Ude,
@@ -27,7 +28,7 @@ from .content import write_mixed_content, write_text
 from .names import XML_LANG
 
 
-def to_element(model: TmxModel) -> etree._Element:
+def to_element(model: TmxNode) -> etree._Element:
   """Build a detached element, without indentation or model_dump().
 
   This is projection, not whole-tree revalidation. The caller owns domain
@@ -102,7 +103,7 @@ def _write_attributes(element: etree._Element, model: TmxModel) -> None:
       raise TmxSpecError(f"XML-illegal attribute {xml_name!r} on <{element.tag}>: {error}") from error
 
 
-def _build_content(element: etree._Element, items: tuple[str | TmxModel, ...]) -> None:
+def _build_content(element: etree._Element, items: tuple[str | TmxNode, ...]) -> None:
   # Finish recursion before interleaving, so each ancestor does not keep
   # write_mixed_content's frame on the stack while building its descendants.
   projected_items = tuple(item if isinstance(item, str) else to_element(item) for item in items)

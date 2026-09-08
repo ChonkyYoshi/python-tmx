@@ -20,7 +20,7 @@ from ..models import (
   Ph,
   Property,
   Sub,
-  TmxModel,
+  TmxNode,
   TranslationUnit,
   TranslationUnitVariant,
   Ude,
@@ -31,7 +31,7 @@ from .dtd import validate_fragment
 from .names import XML_LANG
 
 
-def from_element(element: etree._Element) -> TmxModel:
+def from_element(element: etree._Element) -> TmxNode:
   """DTD-check a fragment, then project it without modifying its tree.
 
   The DTD runs once over the whole fragment; recursion below projects
@@ -42,7 +42,7 @@ def from_element(element: etree._Element) -> TmxModel:
   return _from_element(element)
 
 
-def _from_element(element: etree._Element) -> TmxModel:
+def _from_element(element: etree._Element) -> TmxNode:
   if not isinstance(element.tag, str) or element.tag.startswith("{"):
     raise TmxSpecError(f"expected a namespace-free TMX element, got {element.tag!r}")
   try:
@@ -201,5 +201,5 @@ def _from_element(element: etree._Element) -> TmxModel:
     raise TmxSpecError(f"<{element.tag}> at line {element.sourceline}: {error}") from error
 
 
-def _parse_content(element: etree._Element) -> tuple[str | TmxModel, ...]:
+def _parse_content(element: etree._Element) -> tuple[str | TmxNode, ...]:
   return tuple(item if isinstance(item, str) else _from_element(item) for item in read_mixed_content(element))

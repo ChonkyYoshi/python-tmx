@@ -60,6 +60,10 @@ type InlineNode = Annotated[Bpt | Ept | Ph | It | Hi | Ut, Field(discriminator="
 type SegContentItem = str | InlineNode
 type SubContentItem = str | Sub
 
+type TmxNode = (
+  Header | TranslationUnit | TranslationUnitVariant | Note | Property | Ude | Map | Bpt | Ept | It | Ph | Hi | Ut | Sub
+)
+
 
 class TmxModel(BaseModel):
   model_config = ConfigDict(extra="forbid", strict=True, validate_assignment=True, validation_error_cause=True)
