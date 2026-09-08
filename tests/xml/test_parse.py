@@ -1,10 +1,10 @@
 """Parse direction: handwritten XML fragments projected to expected models.
 
 Every expected model is written by hand; nothing here round-trips through
-the builder. Only TmxWarning advisories are muted (inside the happy-path
-table and the routine helpers); error messages are matched by tag/line/
-substring, never frozen, since the full lxml/Pydantic wording is not the
-contract.
+the builder. TmxWarning advisories are muted only where legitimately emitted
+(the happy-path table and the bare-<map> value case, via narrowly applied
+filterwarnings marks); error messages are matched by tag/line/substring,
+never frozen, since the full lxml/Pydantic wording is not the contract.
 """
 
 import warnings
@@ -35,18 +35,6 @@ from hypomnema.models import (
 from hypomnema.xml.parse import from_element
 
 OFFSET_PLUS_0230 = timezone(timedelta(hours=2, minutes=30))
-
-
-def parse(markup: str) -> TmxNode:
-  """Project one handwritten fragment, ignoring TmxWarning advisories (tested separately)."""
-  with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", category=TmxWarning)
-    return from_element(etree.fromstring(markup))
-
-
-def parse_expect_warning(markup: str, match: str) -> None:
-  with pytest.warns(TmxWarning, match=match):
-    from_element(etree.fromstring(markup))
 
 
 # All fourteen node types, each with every attribute set to a distinct value
@@ -192,59 +180,62 @@ with warnings.catch_warnings():
   ]
 
 
+@pytest.mark.filterwarnings("ignore::hypomnema.errors.TmxWarning")
 @pytest.mark.parametrize(
   ["markup", "expected"], [(case[1], case[2]) for case in HAPPY_PATH], ids=[case[0] for case in HAPPY_PATH]
 )
 def test_parses_to_expected_model(markup: str, expected: TmxNode) -> None:
-  assert parse(markup) == expected
+  assert from_element(etree.fromstring(markup)) == expected
 
 
 def test_header_metadata_preserves_interleaved_document_order() -> None:
-  parsed = parse(
+  markup = (
     '<header creationtool="CT" creationtoolversion="1" segtype="block" o-tmf="G" adminlang="en"'
     ' srclang="en" datatype="txt"><note>n</note><prop type="p">p</prop>'
     '<ude name="U"><map unicode="#x41" code="#x42"/></ude><note>n2</note></header>'
   )
+  parsed = from_element(etree.fromstring(markup))
   assert isinstance(parsed, Header)
   assert [child.element for child in parsed.metadata] == ["note", "prop", "ude", "note"]
   assert [child.text for child in parsed.metadata if isinstance(child, Note)] == ["n", "n2"]
 
 
 def test_tu_metadata_stays_separate_from_variants() -> None:
-  parsed = parse(
+  markup = (
     '<tu><note>n</note><prop type="p">p</prop>'
     '<tuv xml:lang="en"><seg>s</seg></tuv><tuv xml:lang="de"><seg>s</seg></tuv></tu>'
   )
+  parsed = from_element(etree.fromstring(markup))
   assert isinstance(parsed, TranslationUnit)
   assert [child.element for child in parsed.metadata] == ["note", "prop"]
   assert [variant.xml_lang for variant in parsed.variants] == ["en", "de"]
 
 
 def test_seg_wrapper_dissolves_into_tuv_content() -> None:
-  parsed = parse('<tuv xml:lang="en"><seg>a<bpt i="1"/>b</seg></tuv>')
+  parsed = from_element(etree.fromstring('<tuv xml:lang="en"><seg>a<bpt i="1"/>b</seg></tuv>'))
   assert isinstance(parsed, TranslationUnitVariant)
   assert parsed.content == ("a", Bpt(i=1), "b")
 
 
 def test_empty_seg_is_empty_content_not_missing() -> None:
-  parsed = parse('<tuv xml:lang="en"><seg/></tuv>')
+  parsed = from_element(etree.fromstring('<tuv xml:lang="en"><seg/></tuv>'))
   assert isinstance(parsed, TranslationUnitVariant)
   assert parsed.content == ()
 
 
 def test_whitespace_is_kept_exactly() -> None:
-  note = parse("<note>  spaced  </note>")
+  note = from_element(etree.fromstring("<note>  spaced  </note>"))
   assert isinstance(note, Note)
   assert note.text == "  spaced  "
-  variant = parse('<tuv xml:lang="en"><seg> a <bpt i="1"/> b </seg></tuv>')
+  variant = from_element(etree.fromstring('<tuv xml:lang="en"><seg> a <bpt i="1"/> b </seg></tuv>'))
   assert isinstance(variant, TranslationUnitVariant)
   assert variant.content == (" a ", Bpt(i=1), " b ")
 
 
 def test_absent_attributes_and_text_are_none() -> None:
-  parsed = parse('<ept i="2"/>')
+  parsed = from_element(etree.fromstring('<ept i="2"/>'))
   assert parsed == Ept(i=2)
-  note = parse("<note/>")
+  note = from_element(etree.fromstring("<note/>"))
   assert isinstance(note, Note)
   assert note.text is None
 
@@ -275,15 +266,16 @@ with warnings.catch_warnings():
   ]
 
 
+@pytest.mark.filterwarnings("ignore::hypomnema.errors.TmxWarning")
 @pytest.mark.parametrize(
   ["markup", "expected"], VALUE_CASES, ids=["zero-int", "leading-zeros", "hex-leading-zeros", "empty-string-attr"]
 )
 def test_zero_and_empty_values_are_retained(markup: str, expected: TmxNode) -> None:
-  assert parse(markup) == expected
+  assert from_element(etree.fromstring(markup)) == expected
 
 
 def test_datetime_offsets_survive_as_native_values() -> None:
-  parsed = parse('<tuv xml:lang="en" lastusagedate="20240203T040506.123456+0230"><seg/></tuv>')
+  parsed = from_element(etree.fromstring('<tuv xml:lang="en" lastusagedate="20240203T040506.123456+0230"><seg/></tuv>'))
   assert isinstance(parsed, TranslationUnitVariant)
   assert parsed.lastusagedate is not None
   assert parsed.lastusagedate == datetime(2024, 2, 3, 4, 5, 6, 123456, tzinfo=OFFSET_PLUS_0230)
@@ -291,11 +283,10 @@ def test_datetime_offsets_survive_as_native_values() -> None:
   assert parsed.lastusagedate.utcoffset() == timedelta(hours=2, minutes=30)
 
 
+@pytest.mark.filterwarnings("ignore::hypomnema.errors.TmxWarning")
 def test_parse_leaves_the_source_tree_untouched() -> None:
   element = etree.fromstring('<note o-encoding="Alpha">hi</note>')
-  with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", category=TmxWarning)
-    from_element(element)
+  from_element(element)
   assert element.attrib == {"o-encoding": "Alpha"}
   assert element.text == "hi"
   assert len(element) == 0
@@ -311,18 +302,18 @@ def test_parse_leaves_the_source_tree_untouched() -> None:
 )
 def test_unknown_vocabulary_is_rejected(markup: str, match: str) -> None:
   with pytest.raises(TmxSpecError, match=match):
-    parse(markup)
+    from_element(etree.fromstring(markup))
 
 
 def test_unknown_attribute_is_rejected_with_dtd_cause() -> None:
   with pytest.raises(TmxSpecError, match="bogus") as excinfo:
-    parse('<note bogus="1">x</note>')
+    from_element(etree.fromstring('<note bogus="1">x</note>'))
   assert isinstance(excinfo.value.__cause__, etree.DocumentInvalid)
 
 
 def test_missing_required_child_is_rejected_with_dtd_cause() -> None:
   with pytest.raises(TmxSpecError) as excinfo:
-    parse('<tuv xml:lang="en"/>')
+    from_element(etree.fromstring('<tuv xml:lang="en"/>'))
   assert isinstance(excinfo.value.__cause__, etree.DocumentInvalid)
 
 
@@ -349,16 +340,17 @@ def test_missing_required_child_is_rejected_with_dtd_cause() -> None:
 )
 def test_invalid_structure_is_rejected_before_projection_can_discard_it(markup: str) -> None:
   with pytest.raises(TmxSpecError) as excinfo:
-    parse(markup)
+    from_element(etree.fromstring(markup))
   assert isinstance(excinfo.value.__cause__, etree.DocumentInvalid)
 
 
 def test_dtd_enumeration_value_is_rejected() -> None:
+  markup = (
+    '<header creationtool="CT" creationtoolversion="1" segtype="word" o-tmf="G"'
+    ' adminlang="en" srclang="en" datatype="txt"/>'
+  )
   with pytest.raises(TmxSpecError, match="segtype"):
-    parse(
-      '<header creationtool="CT" creationtoolversion="1" segtype="word" o-tmf="G"'
-      ' adminlang="en" srclang="en" datatype="txt"/>'
-    )
+    from_element(etree.fromstring(markup))
 
 
 @pytest.mark.parametrize(
@@ -373,7 +365,7 @@ def test_dtd_enumeration_value_is_rejected() -> None:
 )
 def test_invalid_value_is_rejected_with_pydantic_cause(markup: str, match: str) -> None:
   with pytest.raises(TmxSpecError, match=match) as excinfo:
-    parse(markup)
+    from_element(etree.fromstring(markup))
   assert isinstance(excinfo.value.__cause__, ValidationError)
 
 
@@ -389,7 +381,7 @@ def test_invalid_value_is_rejected_with_pydantic_cause(markup: str, match: str) 
 )
 def test_error_context_names_element_and_line(markup: str, tag: str, line: str) -> None:
   with pytest.raises(TmxSpecError, match=f"<{tag}>.*{line}"):
-    parse(markup)
+    from_element(etree.fromstring(markup))
 
 
 def test_nested_value_error_keeps_source_line_and_pydantic_cause() -> None:
@@ -398,61 +390,66 @@ def test_nested_value_error_keeps_source_line_and_pydantic_cause() -> None:
   # element and its source line, with the Pydantic cause attached.
   markup = '<tu>\n  <tuv xml:lang="en"><seg><bpt i="1x"/></seg></tuv>\n</tu>'
   with pytest.raises(TmxSpecError, match="<bpt>.*line 2") as excinfo:
-    parse(markup)
+    from_element(etree.fromstring(markup))
   assert isinstance(excinfo.value.__cause__, ValidationError)
 
 
-DTD_VALID_TM_DOCUMENT = (
-  '<tmx version="1.4"><header creationtool="CT" creationtoolversion="1" segtype="block" o-tmf="G"'
-  ' adminlang="en" srclang="en" datatype="txt"/><body/></tmx>'
-)
-
-
-@pytest.mark.parametrize(["markup"], [("<seg/>",), (DTD_VALID_TM_DOCUMENT,), ("<body/>",)], ids=["seg", "tmx", "body"])
+@pytest.mark.parametrize("markup", ["<seg/>", "<body/>"], ids=["seg", "body"])
 def test_document_wrappers_have_no_standalone_model(markup: str) -> None:
   # The wrappers pass DTD validation, so the rejection is the projection's
   # own: they have no standalone domain model.
   with pytest.raises(TmxSpecError, match="standalone"):
-    parse(markup)
+    from_element(etree.fromstring(markup))
+
+
+def test_tmx_has_no_standalone_model(valid_tmx_document: str) -> None:
+  # The full document passes DTD validation, so the rejection is the
+  # projection's own: it has no standalone domain model.
+  with pytest.raises(TmxSpecError, match="standalone"):
+    from_element(etree.fromstring(valid_tmx_document))
 
 
 def test_legacy_lang_never_substitutes_for_required_xml_lang() -> None:
   with pytest.raises(TmxSpecError):
-    parse('<tuv lang="en"><seg/></tuv>')
+    from_element(etree.fromstring('<tuv lang="en"><seg/></tuv>'))
 
 
 @pytest.mark.parametrize(
-  ["markup"],
-  [('<bpt i="1"><hi>x</hi></bpt>',), ("<sub><sub/></sub>",), ('<ept i="1"><ept i="2"/></ept>',)],
+  "markup",
+  ['<bpt i="1"><hi>x</hi></bpt>', "<sub><sub/></sub>", '<ept i="1"><ept i="2"/></ept>'],
   ids=["hi-in-bpt", "sub-in-sub", "ept-in-ept"],
 )
 def test_illegal_inline_nesting_is_rejected(markup: str) -> None:
   with pytest.raises(TmxSpecError):
-    parse(markup)
+    from_element(etree.fromstring(markup))
 
 
 # --- Advisories: soft warnings, kept values. ---
 
 
 def test_ut_deprecation_warning() -> None:
-  parse_expect_warning("<ut/>", "deprecated")
+  with pytest.warns(TmxWarning, match="deprecated"):
+    from_element(etree.fromstring("<ut/>"))
 
 
 def test_lang_without_xml_lang_warns() -> None:
-  parse_expect_warning('<note lang="fr"/>', "prefer xml:lang")
+  with pytest.warns(TmxWarning, match="prefer xml:lang"):
+    from_element(etree.fromstring('<note lang="fr"/>'))
 
 
 def test_differing_lang_and_xml_lang_warn() -> None:
-  parse_expect_warning('<note lang="fr" xml:lang="de"/>', "differ")
+  with pytest.warns(TmxWarning, match="differ"):
+    from_element(etree.fromstring('<note lang="fr" xml:lang="de"/>'))
 
 
 def test_map_without_any_target_warns() -> None:
-  parse_expect_warning('<map unicode="#x41"/>', "code, ent, or subst")
+  with pytest.warns(TmxWarning, match="code, ent, or subst"):
+    from_element(etree.fromstring('<map unicode="#x41"/>'))
 
 
 def test_equivalent_lang_and_xml_lang_do_not_warn() -> None:
-  # parse() mutes TmxWarning, so this must call from_element directly under
-  # an escalating filter to prove the advisory is absent, not swallowed.
+  # This runs under an escalating filter to prove the advisory is absent,
+  # not swallowed by any suppression elsewhere in the suite.
   with warnings.catch_warnings():
     warnings.filterwarnings("error", category=TmxWarning)
     parsed = from_element(etree.fromstring('<note lang="FR" xml:lang="fr">x</note>'))

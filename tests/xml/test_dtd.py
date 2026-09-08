@@ -15,16 +15,10 @@ from lxml import etree
 from hypomnema.errors import TmxSpecError
 from hypomnema.xml.dtd import load_dtd, validate_fragment
 
-VALID_DOCUMENT = (
-  "<tmx version='1.4'>"
-  "<header creationtool='t' creationtoolversion='1' segtype='phrase' o-tmf='ascii'"
-  " adminlang='en' srclang='en' datatype='txt'/>"
-  "<body><tu><tuv xml:lang='en'><seg>hello</seg></tuv></tu></body>"
-  "</tmx>"
-)
 
-
-def test_dtd_loads_and_validates_regardless_of_working_directory(tmp_path: pathlib.Path) -> None:
+def test_dtd_loads_and_validates_regardless_of_working_directory(
+  tmp_path: pathlib.Path, valid_tmx_document: str
+) -> None:
   # A fresh interpreter guarantees a cold resource load without coupling this
   # test to the loader's caching implementation or the suite's execution order.
   result = subprocess.run(
@@ -32,7 +26,7 @@ def test_dtd_loads_and_validates_regardless_of_working_directory(tmp_path: pathl
       sys.executable,
       "-c",
       "from lxml import etree; from hypomnema.xml.dtd import validate_fragment; "
-      f"validate_fragment(etree.fromstring({VALID_DOCUMENT!r}))",
+      f"validate_fragment(etree.fromstring({valid_tmx_document!r}))",
     ],
     cwd=tmp_path,
     capture_output=True,
@@ -44,8 +38,8 @@ def test_dtd_loads_and_validates_regardless_of_working_directory(tmp_path: pathl
 # --- whole-document (root) validation ---------------------------------------
 
 
-def test_a_conforming_document_validates() -> None:
-  validate_fragment(etree.fromstring(VALID_DOCUMENT))
+def test_a_conforming_document_validates(valid_tmx_document: str) -> None:
+  validate_fragment(etree.fromstring(valid_tmx_document))
 
 
 def test_a_nonconforming_document_is_rejected_with_element_and_line() -> None:

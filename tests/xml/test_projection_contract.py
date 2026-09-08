@@ -5,7 +5,6 @@ are handwritten native/lexical pairs, not generated with production parsers
 or formatters. Individual direction tests live in test_parse/test_build.
 """
 
-import warnings
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta, timezone
 from importlib.resources import files
@@ -14,7 +13,6 @@ from typing import get_args
 import pytest
 from lxml import etree
 
-from hypomnema.errors import TmxWarning
 from hypomnema.models import (
   Bpt,
   Ept,
@@ -95,15 +93,16 @@ def fragment_with_all_attributes(tag: str) -> etree._Element:
   return element
 
 
-def model_with_all_attributes(tag: str) -> TmxNode:
-  attributes: dict[str, object] = {field: native for _, field, _, native in attribute_examples(tag)}
-  # Minimal legal children, authored independently of the XML parser.
-  match tag:
-    case "tu":
-      attributes["variants"] = (TranslationUnitVariant(xml_lang="en"),)
-    case "ude":
-      attributes["maps"] = (Map(unicode=0x41, ent="A"),)
-  return NODE_MODELS[tag].model_validate(attributes)
+def model_with_all_attributes(minimal_node: TmxNode) -> TmxNode:
+  attributes: dict[str, object] = {field: native for _, field, _, native in attribute_examples(minimal_node.element)}
+  # Reuse construction scaffolding, never an XML parse result, for required
+  # children. Attribute expectations still come independently from the DTD.
+  match minimal_node:
+    case TranslationUnit():
+      attributes["variants"] = minimal_node.variants
+    case Ude():
+      attributes["maps"] = minimal_node.maps
+  return type(minimal_node).model_validate(attributes)
 
 
 def test_node_union_covers_exactly_the_dtd_elements_with_domain_models() -> None:
@@ -127,48 +126,39 @@ def test_model_attribute_inventory_and_requiredness_agree_with_dtd(tag: str) -> 
 
 
 @pytest.mark.parametrize("tag", MODELED_TAGS)
+@pytest.mark.filterwarnings("ignore::hypomnema.errors.TmxWarning")
 def test_every_declared_attribute_is_read_into_its_native_model_field(tag: str) -> None:
   element = fragment_with_all_attributes(tag)
   DTD.assertValid(element)
-  with warnings.catch_warnings():
-    warnings.simplefilter("ignore", TmxWarning)  # deprecated ut remains part of the inventory
-    model = from_element(element)
+  model = from_element(element)
   assert type(model) is NODE_MODELS[tag]
   expected = {field: native for _, field, _, native in attribute_examples(tag)}
   actual = {field: getattr(model, field) for field in expected}
   assert actual == expected
 
 
-@pytest.mark.parametrize("tag", MODELED_TAGS)
-def test_every_declared_attribute_is_written_with_its_xml_name_and_spelling(tag: str) -> None:
-  with warnings.catch_warnings():
-    warnings.simplefilter("ignore", TmxWarning)
-    model = model_with_all_attributes(tag)
+@pytest.mark.filterwarnings("ignore::hypomnema.errors.TmxWarning")
+def test_every_declared_attribute_is_written_with_its_xml_name_and_spelling(minimal_node: TmxNode) -> None:
+  model = model_with_all_attributes(minimal_node)
   element = to_element(model)
   DTD.assertValid(element)
-  assert element.tag == tag
-  assert dict(element.attrib) == {xml_name: lexical for xml_name, _, lexical, _ in attribute_examples(tag)}
+  assert element.tag == minimal_node.element
+  assert dict(element.attrib) == {
+    xml_name: lexical for xml_name, _, lexical, _ in attribute_examples(minimal_node.element)
+  }
 
 
-def test_header_tree_round_trip_preserves_interleaving_and_empty_text_slots() -> None:
-  original = Header(
-    creationtool="example",
-    creationtoolversion="1",
-    segtype="sentence",
-    o_tmf="example-format",
-    adminlang="en",
-    srclang="en",
-    datatype="plaintext",
-    metadata=(
-      Note(text=None),
-      Property(type="empty", text=""),
-      Ude(
-        name="source-alphabet",
-        base="ascii",
-        maps=(Map(unicode=0, ent="nul"), Map(unicode=0x1F642, code=0x41, subst=":)")),
-      ),
-      Note(xml_lang="fr", text="  note\nintacte  "),
+def test_header_tree_round_trip_preserves_interleaving_and_empty_text_slots(minimal_header: Header) -> None:
+  original = minimal_header
+  original.metadata = (
+    Note(text=None),
+    Property(type="empty", text=""),
+    Ude(
+      name="source-alphabet",
+      base="ascii",
+      maps=(Map(unicode=0, ent="nul"), Map(unicode=0x1F642, code=0x41, subst=":)")),
     ),
+    Note(xml_lang="fr", text="  note\nintacte  "),
   )
   wrapper = etree.Element("tmx", version="1.4")
   wrapper.append(to_element(original))
